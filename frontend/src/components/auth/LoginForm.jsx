@@ -32,14 +32,27 @@ export default function LoginForm() {
     },
   });
 
-  const onSubmit = async (data) => {
-    const success = await login(data);
+const onSubmit = async (data) => {
+  const result = await login(data);
 
-    if (success) {
+  if (result) {
+    const role = result?.user?.role || result?.role;
+
+    if (
+      role === "SUPER_ADMIN" ||
+      role === "ADMIN" ||
+      role === "PRINCIPAL"
+    ) {
       router.replace("/admin/dashboard");
-      router.refresh();
+    } else {
+      router.replace("/");
     }
-  };
+
+    router.refresh();
+  }
+};
+
+
 
   return (
     <Card
