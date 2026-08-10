@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-import { Box, Chip, Container, Skeleton, Stack, Typography, Button } from "@mui/material";
+import { Box, Chip, Container, IconButton, Skeleton, Stack, Tooltip, Typography, Button } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ShareIcon from "@mui/icons-material/Share";
+import CheckIcon from "@mui/icons-material/Check";
 
 import { useNewsDetail } from "@/hooks/useNews";
 import EmptyState from "@/components/common/EmptyState";
@@ -28,6 +31,30 @@ export default function NewsDetailPage() {
   const { data, isLoading, isError } = useNewsDetail(slug);
   const news = data?.data;
 
+  const [justCopied, setJustCopied] = useState(false);
+
+  const handleShare = async () => {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: news?.title, text: news?.excerpt || news?.title, url });
+      } catch {
+        // user cancelled the native share sheet — not an error
+      }
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setJustCopied(true);
+      setTimeout(() => setJustCopied(false), 1800);
+    } catch {
+      // clipboard blocked — silently no-op rather than an alarming error
+      // for a non-critical action
+    }
+  };
+
   if (isLoading) {
     return (
       <Container maxWidth="md" sx={{ py: 6 }}>
@@ -51,13 +78,24 @@ export default function NewsDetailPage() {
 
   return (
     <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 } }}>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => router.push("/news")}
-        sx={{ textTransform: "none", color: "#71717a", mb: 2, pl: 0 }}
-      >
-        Back to News
-      </Button>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => router.push("/news")}
+          sx={{ textTransform: "none", color: "#71717a", pl: 0 }}
+        >
+          Back to News
+        </Button>
+
+        <Tooltip title={justCopied ? "Link copied!" : "Share this article"}>
+          <IconButton
+            onClick={handleShare}
+            sx={{ border: "1px solid #e4e4e7", color: justCopied ? "#15803d" : "#3f3f46" }}
+          >
+            {justCopied ? <CheckIcon fontSize="small" /> : <ShareIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+      </Stack>
 
       {news.coverImage?.url && (
         // eslint-disable-next-line @next/next/no-img-element
@@ -74,7 +112,7 @@ export default function NewsDetailPage() {
             {news.heading}
           </Typography>
         )}
-        <Typography component="h1" sx={{ fontSize: { xs: 26, md: 32 }, fontWeight: 800, color: "#18181b", lineHeight: 1.2 }}>
+        <Typography component="h1" sx={{ fontSize: { xs: 24, md: 32 }, fontWeight: 800, color: "#18181b", lineHeight: 1.2 }}>
           {news.title}
         </Typography>
         <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
@@ -88,7 +126,7 @@ export default function NewsDetailPage() {
 
       <Typography
         component="div"
-        sx={{ fontSize: 16, color: "#27272a", lineHeight: 1.8, whiteSpace: "pre-wrap" }}
+        sx={{ fontSize: { xs: 15, md: 16 }, color: "#27272a", lineHeight: 1.8, whiteSpace: "pre-wrap" }}
       >
         {news.content}
       </Typography>
@@ -96,7 +134,7 @@ export default function NewsDetailPage() {
       {news.gallery?.length > 0 && (
         <Box sx={{ mt: 4 }}>
           <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: "#71717a", mb: 1.5 }}>GALLERY</Typography>
-          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 1.5 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 1.5 }}>
             {news.gallery.map((img) => (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -118,6 +156,16 @@ export default function NewsDetailPage() {
           ))}
         </Stack>
       )}
+
+      <Stack direction="row" justifyContent="center" sx={{ mt: 5, display: { xs: "flex", sm: "none" } }}>
+        <Button
+          startIcon={justCopied ? <CheckIcon /> : <ShareIcon />}
+          onClick={handleShare}
+          sx={{ textTransform: "none", border: "1px solid #e4e4e7", px: 3, color: justCopied ? "#15803d" : "#3f3f46" }}
+        >
+          {justCopied ? "Link Copied" : "Share Article"}
+        </Button>
+      </Stack>
     </Container>
   );
 }

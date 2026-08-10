@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   Box,
   Chip,
@@ -9,9 +11,12 @@ import {
   IconButton,
   Skeleton,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import ShareIcon from "@mui/icons-material/Share";
+import CheckIcon from "@mui/icons-material/Check";
 
 import { useNewsDetail } from "@/hooks/useNews";
 
@@ -33,14 +38,42 @@ export default function NewsDetailDialog({ slug, open, onClose }) {
   const { data, isLoading } = useNewsDetail(slug);
   const news = data?.data;
 
+  const [justCopied, setJustCopied] = useState(false);
+
+  const handleShare = async () => {
+    const url =
+      typeof window !== "undefined" && slug ? `${window.location.origin}/news/${slug}` : "";
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: news?.title, text: news?.excerpt || news?.title, url });
+      } catch {
+        // user cancelled the native share sheet — not an error
+      }
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setJustCopied(true);
+      setTimeout(() => setJustCopied(false), 1800);
+    } catch {
+      // clipboard blocked — silently no-op
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="body">
-      <IconButton
-        onClick={onClose}
-        sx={{ position: "absolute", top: 12, right: 12, zIndex: 1, bgcolor: "rgba(255,255,255,0.9)" }}
-      >
-        <CloseIcon fontSize="small" />
-      </IconButton>
+      <Stack direction="row" spacing={1} sx={{ position: "absolute", top: 12, right: 12, zIndex: 1 }}>
+        <Tooltip title={justCopied ? "Link copied!" : "Share"}>
+          <IconButton onClick={handleShare} sx={{ bgcolor: "rgba(255,255,255,0.9)", color: justCopied ? "#15803d" : "inherit" }}>
+            {justCopied ? <CheckIcon fontSize="small" /> : <ShareIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+        <IconButton onClick={onClose} sx={{ bgcolor: "rgba(255,255,255,0.9)" }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Stack>
 
       {isLoading || !news ? (
         <Box sx={{ p: 4 }}>
@@ -69,7 +102,7 @@ export default function NewsDetailDialog({ slug, open, onClose }) {
                   {news.heading}
                 </Typography>
               )}
-              <Typography sx={{ fontSize: 24, fontWeight: 800, color: "#18181b", lineHeight: 1.25 }}>
+              <Typography sx={{ fontSize: { xs: 20, md: 24 }, fontWeight: 800, color: "#18181b", lineHeight: 1.25 }}>
                 {news.title}
               </Typography>
               <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
@@ -89,7 +122,7 @@ export default function NewsDetailDialog({ slug, open, onClose }) {
           <DialogContent>
             <Typography
               component="div"
-              sx={{ fontSize: 15, color: "#27272a", lineHeight: 1.75, whiteSpace: "pre-wrap" }}
+              sx={{ fontSize: { xs: 14, md: 15 }, color: "#27272a", lineHeight: 1.75, whiteSpace: "pre-wrap" }}
             >
               {news.content}
             </Typography>
@@ -99,7 +132,7 @@ export default function NewsDetailDialog({ slug, open, onClose }) {
                 <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#71717a", mb: 1.5 }}>
                   GALLERY
                 </Typography>
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 1.5 }}>
                   {news.gallery.map((img) => (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

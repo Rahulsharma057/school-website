@@ -17,6 +17,7 @@ const galleryImageRoutes = require("./galleryImage.routes");
 const quoteRoutes = require("./quote.routes");
 const quoteSectionRoutes = require("./quoteSection.routes");
 const newsRoutes = require("./news.routes"); 
+const newsSectionRoutes = require("./newsSection.routes");
 const announcementRoutes = require("./announcement.routes");
 const contactPageRoutes = require("./contactPage.routes");
 const footerRoutes = require("./footer.routes");
@@ -64,7 +65,10 @@ router.use("/quotes", quoteRoutes);
 router.use("/quote-sections", quoteSectionRoutes);
 router.use("/announcements", announcementRoutes);
 router.use("/news", newsRoutes);
+
+router.use("/news-sections", newsSectionRoutes);
 router.use("/contact-pages", contactPageRoutes);
+
 
 router.use("/footer", footerRoutes);
 router.get("/", (req, res) => {

@@ -29,17 +29,15 @@ import ConfirmationDialog from "@/components/common/ConfirmationDialog";
 const API = process.env.NEXT_PUBLIC_API_URL;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// FIX: MUI v7's Grid uses `size={{ xs, sm }}` instead of the old
+// `item xs={} sm={}` props — the old props are silently ignored (no
+// error, no warning), which is exactly why width looked broken despite
+// smWidth being computed correctly. Every Grid child below now uses
+// the `size` prop.
 const WIDTH_GRID_MAP = { full: 12, half: 6, third: 4, quarter: 3 };
 
-// Constant hidden field name — MUST match backend's HONEYPOT_FIELD_NAME
-// in formEntry.controller.js. A real visitor never sees this input
-// (visually hidden, off-screen, no label); a bot's autofill script
-// often fills every input it finds regardless of visibility.
 const HONEYPOT_FIELD_NAME = "_hpw";
 
-// Mirrors the backend's evaluateRule/isFieldVisible — a field's
-// visibility is now the AND/OR combination of ALL its conditional
-// rules, not just one.
 const evaluateRule = (rule, values) => {
   const watchedValue = values[rule.fieldName];
   const target = rule.value ?? "";
@@ -60,9 +58,6 @@ const isFieldVisible = (field, values) => {
   return field.conditional.logic === "OR" ? results.some(Boolean) : results.every(Boolean);
 };
 
-// A field is required if it's unconditionally required, OR if it's only
-// required while conditionally visible (and we already know it's visible
-// here, since this only runs on visibleFields).
 const isFieldRequired = (field) => {
   if (field.conditional?.enabled && field.conditional?.requiredWhenVisible) return true;
   return Boolean(field.required);
@@ -214,9 +209,6 @@ export default function FormRenderer({ form }) {
       const submitValues = Object.fromEntries(Object.entries(values).filter(([key]) => visibleNames.has(key)));
       fd.append("data", JSON.stringify(submitValues));
 
-      // Honeypot — sent as its own top-level field, exactly like the
-      // backend expects. Left empty by real users; a bot's autofill
-      // often fills it, which silently discards the submission server-side.
       if (honeypotEnabled) {
         fd.append(HONEYPOT_FIELD_NAME, honeypot);
       }
@@ -338,9 +330,6 @@ export default function FormRenderer({ form }) {
             </Typography>
           )}
 
-          {/* Honeypot — visually and structurally hidden from real users
-              (off-screen, tabIndex -1, no visible label), but present in
-              the DOM for bots that blindly fill every input they find. */}
           {honeypotEnabled && (
             <Box
               sx={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}
@@ -364,7 +353,7 @@ export default function FormRenderer({ form }) {
 
               if (field.type === "section") {
                 return (
-                  <Grid item xs={12} key={field.id}>
+                  <Grid size={{ xs: 12 }} key={field.id}>
                     <Collapse in appear timeout={250}>
                       <Box sx={{ pt: 1, pb: 0.5, borderBottom: "1px solid #e4e4e7" }}>
                         <Typography sx={{ fontSize: 16, fontWeight: 700, color: "#18181b" }}>{field.label}</Typography>
@@ -381,7 +370,7 @@ export default function FormRenderer({ form }) {
 
               if (["text", "email", "phone", "number", "date"].includes(field.type)) {
                 return (
-                  <Grid item xs={12} sm={smWidth} key={field.id}>
+                  <Grid size={{ xs: 12, sm: smWidth }} key={field.id}>
                     <Collapse in appear timeout={250}>
                       <TextField
                         fullWidth
@@ -414,7 +403,7 @@ export default function FormRenderer({ form }) {
 
               if (field.type === "textarea") {
                 return (
-                  <Grid item xs={12} sm={smWidth} key={field.id}>
+                  <Grid size={{ xs: 12, sm: smWidth }} key={field.id}>
                     <Collapse in appear timeout={250}>
                       <TextField
                         fullWidth
@@ -441,7 +430,7 @@ export default function FormRenderer({ form }) {
 
               if (field.type === "select") {
                 return (
-                  <Grid item xs={12} sm={smWidth} key={field.id}>
+                  <Grid size={{ xs: 12, sm: smWidth }} key={field.id}>
                     <Collapse in appear timeout={250}>
                       <TextField
                         select
@@ -472,7 +461,7 @@ export default function FormRenderer({ form }) {
               if (field.type === "radio") {
                 const selected = values[field.name] || "";
                 return (
-                  <Grid item xs={12} sm={smWidth} key={field.id}>
+                  <Grid size={{ xs: 12, sm: smWidth }} key={field.id}>
                     <Collapse in appear timeout={250}>
                       <Box>
                         <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 1, color: "#18181b" }}>
@@ -516,7 +505,7 @@ export default function FormRenderer({ form }) {
               if (field.type === "checkbox") {
                 const selectedValues = values[field.name] || [];
                 return (
-                  <Grid item xs={12} sm={smWidth} key={field.id}>
+                  <Grid size={{ xs: 12, sm: smWidth }} key={field.id}>
                     <Collapse in appear timeout={250}>
                       <Box>
                         <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 1, color: "#18181b" }}>
@@ -563,7 +552,7 @@ export default function FormRenderer({ form }) {
                 const isFull = selectedFiles.length >= maxFiles;
 
                 return (
-                  <Grid item xs={12} sm={smWidth} key={field.id}>
+                  <Grid size={{ xs: 12, sm: smWidth }} key={field.id}>
                     <Collapse in appear timeout={250}>
                       <Box>
                         <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 1, color: "#18181b" }}>

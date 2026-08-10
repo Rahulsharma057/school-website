@@ -12,22 +12,22 @@ export default function HomePage() {
     <>
       <AnnouncementTicker placement="homepage-ticker" />
       <HeroSlider />
-            {/* Testimonials */}
+      {/* Testimonials */}
       <QuoteWall slug="directors-says" />
       <GalleryGrid slug="annual-day-2026" />
       <Container maxWidth="lg" sx={{ pt: 2 }}>
-         <NoticeBoard
-        placement="homepage-ticker"
-        title="Latest Circulars"
-        height={280}
-        intervalMs={4000}
-      />
+        <NoticeBoard
+          placement="homepage-ticker"
+          title="Latest Circulars"
+          height={280}
+          intervalMs={4000}
+        />
       </Container>
+      <NewsGrid slug="school-news" />
 
-     
-
-      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
-        <Box sx={{ mb: 4 }}>
+      {/*
+         <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+          <Box sx={{ mb: 4 }}>
           <Box
             component="h1"
             sx={{
@@ -40,9 +40,18 @@ export default function HomePage() {
             News & Announcements
           </Box>
         </Box>
+ <NewsGrid title="" limit={3} columns={3} paginated detailMode="link" /> 
+// Manual mode — still works exactly as before, PLUS new layout/button props:
+<NewsGrid
+  title="Latest News"
+  limit={6}
+  category="sports"
+  layout={{ displayStyle: "slider", columns: 4, mobileColumns: 1 }}
+  button={{ enabled: true, label: "All Sports News", url: "/news?category=sports" }}
+/>
 
-        <NewsGrid title="" limit={3} columns={3} paginated detailMode="link" />
       </Container>
+ */}
 
       {/* Quick Links */}
 
@@ -61,8 +70,6 @@ export default function HomePage() {
       {/* Gallery */}
 
       {/* Achievements */}
-
-
 
       {/* Admission */}
 
