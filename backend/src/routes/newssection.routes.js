@@ -32,7 +32,7 @@ router.post(
   createSection,
 );
 router.get(
-  "/:id",
+  "/:id" ,
   authMiddleware,
   allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"),
   getSection,
