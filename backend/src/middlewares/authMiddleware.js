@@ -1,27 +1,38 @@
 const jwt = require("jsonwebtoken");
-
 const User = require("../models/User");
 
 const authMiddleware = async (req, res, next) => {
   try {
-    const token = req.cookies.token;
+    console.log("========== AUTH DEBUG ==========");
+    console.log("Origin:", req.headers.origin);
+    console.log("Cookie header:", req.headers.cookie);
+    console.log("Parsed cookies:", req.cookies);
+    console.log("Token exists:", !!req.cookies?.token);
+    console.log("JWT_SECRET exists:", !!process.env.JWT_SECRET);
+    console.log("================================");
+
+    const token = req.cookies?.token;
 
     if (!token) {
       return res.status(401).json({
         success: false,
-
         message: "Authentication required",
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
 
-    const user = await User.findById(decoded.id).select("-password");
+    console.log("Decoded token:", decoded);
+
+    const user = await User.findById(decoded.id)
+      .select("-password");
 
     if (!user) {
       return res.status(401).json({
         success: false,
-
         message: "User not found",
       });
     }
@@ -29,7 +40,6 @@ const authMiddleware = async (req, res, next) => {
     if (!user.isActive) {
       return res.status(403).json({
         success: false,
-
         message: "Account inactive",
       });
     }
@@ -38,9 +48,10 @@ const authMiddleware = async (req, res, next) => {
 
     next();
   } catch (error) {
+    console.error("AUTH ERROR:", error);
+
     return res.status(401).json({
       success: false,
-
       message: "Invalid or expired token",
     });
   }
