@@ -203,9 +203,10 @@ const customPageSchema = new mongoose.Schema(
 
     showInNavbar: { type: Boolean, default: false },
     navbarOrder: { type: Number, default: 0 },
+    navbarParentId: { type: String, default: null, trim: true },
     showInFooter: { type: Boolean, default: false },
     footerOrder: { type: Number, default: 0 },
-
+footerSectionId: { type: String, default: null, trim: true }, 
     featured: { type: Boolean, default: false },
     status: { type: Boolean, default: true },
     order: { type: Number, default: 0 },

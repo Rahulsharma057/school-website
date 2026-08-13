@@ -8,81 +8,42 @@ import { CacheProvider } from "@emotion/react";
 
 import createCache from "@emotion/cache";
 
+export default function ThemeRegistry({ children }) {
+  const [cache] = useState(() => {
+    const emotionCache = createCache({
+      key: "mui",
+      prepend: true,
+    });
 
-export default function ThemeRegistry({
-  children,
-}) {
+    emotionCache.compat = true;
 
+    return emotionCache;
+  });
 
-const [cache] = useState(()=>{
+  useServerInsertedHTML(() => {
+    const names = cache.inserted;
 
-const emotionCache = createCache({
-key:"mui",
-prepend:true,
-});
+    let styles = "";
 
+    for (const name in names) {
+      if (names[name]) {
+        styles += names[name];
+      }
+    }
 
-emotionCache.compat = true;
+    if (styles.length === 0) {
+      return null;
+    }
 
-return emotionCache;
+    return (
+      <style
+        data-emotion={`${cache.key} ${Object.keys(cache.inserted).join(" ")}`}
+        dangerouslySetInnerHTML={{
+          __html: styles,
+        }}
+      />
+    );
+  });
 
-});
-
-
-
-useServerInsertedHTML(()=>{
-
-const names =
-cache.inserted;
-
-
-let styles = "";
-
-
-for(const name in names){
-
-if(names[name]){
-
-styles += names[name];
-
-}
-
-}
-
-
-
-if(styles.length===0){
-
-return null;
-
-}
-
-
-
-return (
-
-<style
-data-emotion={`${cache.key} ${Object.keys(cache.inserted).join(" ")}`}
-dangerouslySetInnerHTML={{
-__html:styles,
-}}
-/>
-
-);
-
-
-});
-
-
-return (
-
-<CacheProvider value={cache}>
-
-{children}
-
-</CacheProvider>
-
-);
-
-
+  return <CacheProvider value={cache}>{children}</CacheProvider>;
 }

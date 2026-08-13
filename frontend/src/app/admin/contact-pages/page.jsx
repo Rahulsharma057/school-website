@@ -1,126 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Box, Typography, Stack, Avatar } from "@mui/material";
+import ContactMailOutlinedIcon from "@mui/icons-material/ContactMailOutlined";
 
-import { Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, Typography } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import CloseIcon from "@mui/icons-material/Close";
+import ContactPageBuilder from "@/components/admin/contact/ContactPageBuilder";
+import ContactPagesTable from "@/components/admin/contact/ContactPagesTable";
 
-import CustomPageForm from "@/components/admin/custom-pages/CustomPageForm";
-import CustomPageTable from "@/components/admin/custom-pages/CustomPageTable";
-import ConfirmationDialog from "@/components/common/ConfirmationDialog";
-
-export default function CustomPagesPage() {
-  const [dialogOpen, setDialogOpen] = useState(false);
+function ContactPagesContent() {
   const [editData, setEditData] = useState(null);
 
-  // FIX: NEW — reported up by CustomPageForm; true if anything has been
-  // touched since the dialog opened (form fields, images, or sections).
-  const [isDirty, setIsDirty] = useState(false);
-  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
-
-  const openCreate = () => {
-    setEditData(null);
-    setIsDirty(false);
-    setDialogOpen(true);
-  };
-
-  const openEdit = (row) => {
+  const handleEdit = (row) => {
     setEditData(row);
-    setIsDirty(false);
-    setDialogOpen(true);
+    // form ke top pe le jao taaki user ko dikhe ki edit mode khul gaya
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Actually closes, no confirmation — used once the admin has confirmed,
-  // or when there's nothing to lose.
-  const forceClose = () => {
-    setDialogOpen(false);
-    setEditData(null);
-    setIsDirty(false);
-    setDiscardConfirmOpen(false);
-  };
-
-  // What every "close" path (X button, backdrop click, Cancel inside the
-  // form) actually calls — steps in with a confirmation only if the
-  // admin has unsaved changes.
-  const requestClose = () => {
-    if (isDirty) {
-      setDiscardConfirmOpen(true);
-    } else {
-      forceClose();
-    }
-  };
-
-  // FIX: NEW — catches an actual browser tab close/refresh while the
-  // dialog is open with unsaved changes (the in-dialog confirmation
-  // above only catches in-app navigation, not this).
-  useEffect(() => {
-    if (!dialogOpen || !isDirty) return;
-
-    const handler = (e) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [dialogOpen, isDirty]);
+  const clearEdit = () => setEditData(null);
 
   return (
-    <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
+    <Box
+      sx={{
+        p: { xs: 2, md: 4 },
+        backgroundColor: "#f8fafc",
+        minHeight: "100vh",
+      }}
+    >
+      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
+        <Avatar
+          sx={{ bgcolor: "#eff6ff", color: "#2563eb", width: 44, height: 44 }}
+        >
+          <ContactMailOutlinedIcon />
+        </Avatar>
         <Box>
-          <Typography variant="h5" fontWeight={700} sx={{ color: "#18181b" }}>
-            Custom Pages
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b" }}>
+            Contact Pages
           </Typography>
-          <Typography sx={{ fontSize: 13, color: "#71717a" }}>
-            Build any page — About, Admissions, Facilities, anything — with the same builder.
+          <Typography variant="body2" sx={{ color: "#64748b" }}>
+            Create and manage public contact pages — address, phone, email, and
+            enquiry forms
           </Typography>
         </Box>
-
-        <Button
-          startIcon={<AddIcon />}
-          variant="contained"
-          disableElevation
-          onClick={openCreate}
-          sx={{ textTransform: "none", fontWeight: 600, bgcolor: "#18181b", "&:hover": { bgcolor: "#27272a" } }}
-        >
-          Add Page
-        </Button>
       </Stack>
 
-      <CustomPageTable onEdit={openEdit} />
+      <Box sx={{ mb: 4 }}>
+        <ContactPageBuilder editData={editData} clearEdit={clearEdit} />
+      </Box>
 
-      <Dialog
-        open={dialogOpen}
-        onClose={requestClose}
-        maxWidth="lg"
-        fullWidth
-        scroll="body"
-        sx={{ "& .MuiDialog-paper": { borderRadius: 3 } }}
-      >
-        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #f4f4f5", position: "sticky", top: 0, bgcolor: "#fff", zIndex: 1 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 17 }}>
-            {editData ? "Edit Page" : "Add Page"}
-          </Typography>
-          <IconButton size="small" onClick={requestClose}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </DialogTitle>
-
-        <DialogContent sx={{ p: { xs: 2, md: 3 }, bgcolor: "#fafafa" }}>
-          <CustomPageForm editData={editData} clearEdit={forceClose} onDirtyChange={setIsDirty} />
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmationDialog
-        open={discardConfirmOpen}
-        title="Discard Changes?"
-        message="You have unsaved changes on this page. Closing now will lose them."
-        confirmText="Discard"
-        onClose={() => setDiscardConfirmOpen(false)}
-        onConfirm={forceClose}
-      />
+      <Box>
+        <Typography
+          variant="h6"
+          sx={{ fontWeight: 700, color: "#1e293b", mb: 2 }}
+        >
+          All Contact Pages
+        </Typography>
+        <ContactPagesTable onEdit={handleEdit} />
+      </Box>
     </Box>
   );
+}
+
+export default function ContactPagesPage() {
+  return <ContactPagesContent />;
 }

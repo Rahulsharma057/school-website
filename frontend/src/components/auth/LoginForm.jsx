@@ -22,14 +22,11 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { loginSchema } from "@/validations/loginSchema";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginForm() {
-  const router = useRouter();
-
   const { login, loading: authLoading } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
@@ -40,27 +37,15 @@ export default function LoginForm() {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: yupResolver(loginSchema),
-
     defaultValues: {
       email: "",
       password: "",
     },
   });
 
+  // Redirect logic ab AuthContext ke andar hai — yahan sirf login call karo
   const onSubmit = async (data) => {
-    const result = await login(data);
-
-    if (result) {
-      const role = result?.user?.role || result?.role;
-
-      if (role === "SUPER_ADMIN" || role === "ADMIN" || role === "PRINCIPAL") {
-        router.replace("/admin/dashboard");
-      } else {
-        router.replace("/");
-      }
-
-      router.refresh();
-    }
+    await login(data);
   };
 
   const isLoading = isSubmitting || authLoading;
@@ -72,23 +57,13 @@ export default function LoginForm() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-
         background:
           "linear-gradient(135deg, #f8f7fb 0%, #f1eef7 50%, #fafafa 100%)",
-
         px: 2,
         py: 5,
       }}
     >
-      <Container
-        maxWidth="xs"
-        sx={{
-          px: {
-            xs: 0,
-            sm: 2,
-          },
-        }}
-      >
+      <Container maxWidth="xs" sx={{ px: { xs: 0, sm: 2 } }}>
         <Card
           elevation={0}
           sx={{
@@ -97,95 +72,55 @@ export default function LoginForm() {
             border: "1px solid #e4e4e7",
             backgroundColor: "#fff",
             overflow: "hidden",
-
             boxShadow: "0 12px 40px rgba(0, 0, 0, 0.07)",
           }}
         >
           {/* ================= HEADER ================= */}
-
           <Box
             sx={{
               px: 3,
               pt: 4,
               pb: 3,
-
               textAlign: "center",
-
               background: "linear-gradient(135deg, #6B12B7 0%, #702f9c 100%)",
-
               color: "#fff",
             }}
           >
-            {/* School Icon */}
-
             <Box
               sx={{
                 width: 64,
                 height: 64,
-
                 mx: "auto",
                 mb: 2,
-
                 borderRadius: "50%",
-
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-
                 backgroundColor: "rgba(255,255,255,0.14)",
-
                 border: "1px solid rgba(255,255,255,0.25)",
               }}
             >
-              <SchoolIcon
-                sx={{
-                  fontSize: 34,
-                }}
-              />
+              <SchoolIcon sx={{ fontSize: 34 }} />
             </Box>
 
-            {/* School Name */}
-
             <Typography
-              sx={{
-                fontSize: 23,
-                fontWeight: 700,
-                letterSpacing: 0.2,
-              }}
+              sx={{ fontSize: 23, fontWeight: 700, letterSpacing: 0.2 }}
             >
               SSGIC
             </Typography>
 
-            <Typography
-              sx={{
-                mt: 0.5,
-                fontSize: 13,
-                opacity: 0.9,
-              }}
-            >
+            <Typography sx={{ mt: 0.5, fontSize: 13, opacity: 0.9 }}>
               School Management Portal
             </Typography>
           </Box>
 
           {/* ================= CONTENT ================= */}
-
           <CardContent
             sx={{
-              p: {
-                xs: 3,
-                sm: 4,
-              },
-
-              "&:last-child": {
-                pb: {
-                  xs: 3,
-                  sm: 4,
-                },
-              },
+              p: { xs: 3, sm: 4 },
+              "&:last-child": { pb: { xs: 3, sm: 4 } },
             }}
           >
-            {/* Login Heading */}
-
             <Box sx={{ mb: 3 }}>
               <Typography
                 sx={{
@@ -197,28 +132,15 @@ export default function LoginForm() {
               >
                 Welcome Back
               </Typography>
-
-              <Typography
-                sx={{
-                  fontSize: 13.5,
-                  color: "#71717a",
-                }}
-              >
+              <Typography sx={{ fontSize: 13.5, color: "#71717a" }}>
                 Sign in to access the administration panel.
               </Typography>
             </Box>
 
-            <Divider
-              sx={{
-                mb: 2.5,
-              }}
-            />
+            <Divider sx={{ mb: 2.5 }} />
 
             {/* ================= FORM ================= */}
-
             <Box component="form" onSubmit={handleSubmit(onSubmit)}>
-              {/* ================= EMAIL ================= */}
-
               <TextField
                 fullWidth
                 label="Email Address"
@@ -233,11 +155,7 @@ export default function LoginForm() {
                   startAdornment: (
                     <InputAdornment position="start">
                       <Typography
-                        sx={{
-                          fontSize: 16,
-                          fontWeight: 600,
-                          color: "#71717a",
-                        }}
+                        sx={{ fontSize: 16, fontWeight: 600, color: "#71717a" }}
                       >
                         @
                       </Typography>
@@ -246,14 +164,9 @@ export default function LoginForm() {
                 }}
                 sx={{
                   mb: 1,
-
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 1.5,
-                  },
+                  "& .MuiOutlinedInput-root": { borderRadius: 1.5 },
                 }}
               />
-
-              {/* ================= PASSWORD ================= */}
 
               <TextField
                 fullWidth
@@ -269,14 +182,10 @@ export default function LoginForm() {
                   startAdornment: (
                     <InputAdornment position="start">
                       <LockOutlinedIcon
-                        sx={{
-                          fontSize: 19,
-                          color: "#71717a",
-                        }}
+                        sx={{ fontSize: 19, color: "#71717a" }}
                       />
                     </InputAdornment>
                   ),
-
                   endAdornment: (
                     <InputAdornment position="end">
                       <IconButton
@@ -296,14 +205,8 @@ export default function LoginForm() {
                     </InputAdornment>
                   ),
                 }}
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 1.5,
-                  },
-                }}
+                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 1.5 } }}
               />
-
-              {/* ================= LOGIN BUTTON ================= */}
 
               <Button
                 fullWidth
@@ -312,66 +215,38 @@ export default function LoginForm() {
                 disabled={isLoading}
                 sx={{
                   mt: 3,
-
                   height: 46,
-
                   borderRadius: 1.5,
-
                   textTransform: "none",
-
                   fontSize: 14.5,
-
                   fontWeight: 700,
-
                   background:
                     "linear-gradient(135deg, #6B12B7 0%, #702f9c 100%)",
-
                   boxShadow: "none",
-
                   "&:hover": {
                     background:
                       "linear-gradient(135deg, #5b0fa0 0%, #63288d 100%)",
-
                     boxShadow: "0 5px 15px rgba(107,18,183,0.20)",
                   },
-
-                  "&.Mui-disabled": {
-                    background: "#d4d4d8",
-                    color: "#fff",
-                  },
+                  "&.Mui-disabled": { background: "#d4d4d8", color: "#fff" },
                 }}
               >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
 
-              {/* ================= REGISTER ================= */}
-
-              <Box
-                sx={{
-                  mt: 2.5,
-
-                  textAlign: "center",
-                }}
-              >
+              <Box sx={{ mt: 2.5, textAlign: "center" }}>
                 <Typography
                   component="span"
-                  sx={{
-                    fontSize: 13,
-                    color: "#71717a",
-                  }}
+                  sx={{ fontSize: 13, color: "#71717a" }}
                 >
                   Don't have an account?{" "}
                 </Typography>
-
                 <Link
                   href="/register"
                   style={{
                     textDecoration: "none",
-
                     color: "#6B12B7",
-
                     fontSize: "13px",
-
                     fontWeight: 700,
                   }}
                 >
@@ -380,16 +255,11 @@ export default function LoginForm() {
               </Box>
             </Box>
 
-            {/* ================= FOOTER ================= */}
-
             <Typography
               sx={{
                 mt: 3,
-
                 textAlign: "center",
-
                 fontSize: 11.5,
-
                 color: "#a1a1aa",
               }}
             >
@@ -398,16 +268,11 @@ export default function LoginForm() {
           </CardContent>
         </Card>
 
-        {/* ================= COPYRIGHT ================= */}
-
         <Typography
           sx={{
             mt: 2.5,
-
             textAlign: "center",
-
             fontSize: 11.5,
-
             color: "#a1a1aa",
           }}
         >

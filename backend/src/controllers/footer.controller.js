@@ -1,5 +1,5 @@
 const { randomUUID } = require("crypto");
-
+const CustomPage = require("../models/CustomPage");
 const Footer = require("../models/Footer");
 const getDefaultFooter = require("../utils/defaultFooter");
 
@@ -180,8 +180,52 @@ const resetFooter = asyncHandler(async (req, res) => {
   return res.json(new ApiResponse(200, footer, "Footer reset to default"));
 });
 
+const getPublicFooter = asyncHandler(async (req, res) => {
+  const footer = await getOrCreateFooter();
+  const plain = footer.toObject ? footer.toObject() : footer;
+
+  const dynamicPages = await CustomPage.find({
+    showInFooter: true,
+    status: true,
+  })
+    .select("title route footerOrder footerSectionId")
+    .sort({ footerOrder: 1 })
+    .lean();
+
+  const sections = (plain.sections || []).map((s) => ({
+    ...s,
+    links: [...(s.links || [])],
+  }));
+
+  for (const page of dynamicPages) {
+    // no matching/chosen section → page simply doesn't show in footer
+    const target = page.footerSectionId
+      ? sections.find((s) => s.id === page.footerSectionId)
+      : null;
+
+    if (!target) continue;
+
+    target.links = [
+      ...target.links,
+      {
+        id: `page-${page._id}`,
+        label: page.title,
+        url: page.route,
+        order: page.footerOrder ?? 0,
+        openInNewTab: false,
+      },
+    ].sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  return res.json(
+    new ApiResponse(200, { ...plain, sections }, "Public footer fetched successfully"),
+  );
+});
+
+
 module.exports = {
   getFooter,
+    getPublicFooter,
   updateFooter,
   uploadLogo,
   removeLogo,

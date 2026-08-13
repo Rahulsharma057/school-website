@@ -21,6 +21,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import SearchIcon from "@mui/icons-material/Search";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import TableChartIcon from "@mui/icons-material/TableChart";
+import LinkIcon from "@mui/icons-material/Link";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
@@ -68,9 +69,9 @@ export default function FormsTable({ onEdit }) {
     onError: () => toast.error("Delete failed"),
   });
 
-  const copyLink = (path) => {
+  const copyLink = (path, message = "Link copied") => {
     navigator.clipboard.writeText(`${SITE_URL}${path}`);
-    toast.success("Link copied");
+    toast.success(message);
   };
 
   if (isLoading) return <LoadingSkeleton />;
@@ -100,7 +101,9 @@ export default function FormsTable({ onEdit }) {
       headerName: "Table Route",
       width: 200,
       renderCell: ({ value }) => (
-        <Typography sx={{ fontSize: 12.5, color: "#52525b", fontFamily: "monospace" }}>
+        <Typography
+          sx={{ fontSize: 12.5, color: "#52525b", fontFamily: "monospace" }}
+        >
           /admin/tables/{value}
         </Typography>
       ),
@@ -123,34 +126,89 @@ export default function FormsTable({ onEdit }) {
       ),
     },
     {
+      field: "editPortal",
+      headerName: "Edit Portal",
+      width: 110,
+      sortable: false,
+      renderCell: ({ row }) => (
+        <Chip
+          label={row.submission?.allowSubmitterEdit ? "Open" : "Closed"}
+          size="small"
+          sx={{
+            fontWeight: 600,
+            fontSize: 11,
+            bgcolor: row.submission?.allowSubmitterEdit ? "#dbeafe" : "#f4f4f5",
+            color: row.submission?.allowSubmitterEdit ? "#1d4ed8" : "#71717a",
+          }}
+        />
+      ),
+    },
+    {
       field: "actions",
       headerName: "Actions",
-      width: 200,
+      width: 240,
       sortable: false,
       renderCell: ({ row }) => (
         <Stack direction="row" spacing={0.3}>
           <Tooltip title="Copy public form link">
-            <IconButton size="small" onClick={() => copyLink(`/forms/${row.slug}`)} sx={{ color: "#52525b" }}>
+            <IconButton
+              size="small"
+              onClick={() => copyLink(`/forms/${row.slug}`)}
+              sx={{ color: "#52525b" }}
+            >
               <ContentCopyIcon fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Open form">
-            <IconButton size="small" href={`/forms/${row.slug}`} target="_blank" sx={{ color: "#52525b" }}>
+            <IconButton
+              size="small"
+              href={`/forms/${row.slug}`}
+              target="_blank"
+              sx={{ color: "#52525b" }}
+            >
               <OpenInNewIcon fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Open entries table">
-            <IconButton size="small" href={`/admin/tables/${row.adminTableSlug}`} sx={{ color: "#52525b" }}>
+            <IconButton
+              size="small"
+              href={`/admin/tables/${row.adminTableSlug}`}
+              sx={{ color: "#52525b" }}
+            >
               <TableChartIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          {row.submission?.allowSubmitterEdit && (
+            <Tooltip title="Copy edit portal link">
+              <IconButton
+                size="small"
+                onClick={() =>
+                  copyLink(
+                    `/forms/portal/${row.slug}`,
+                    "Edit portal link copied",
+                  )
+                }
+                sx={{ color: "#1d4ed8" }}
+              >
+                <LinkIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => onEdit(row)} sx={{ color: "#18181b" }}>
+            <IconButton
+              size="small"
+              onClick={() => onEdit(row)}
+              sx={{ color: "#18181b" }}
+            >
               <EditIcon fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Delete">
-            <IconButton size="small" onClick={() => setDeleteId(row.id)} sx={{ color: "#dc2626" }}>
+            <IconButton
+              size="small"
+              onClick={() => setDeleteId(row.id)}
+              sx={{ color: "#dc2626" }}
+            >
               <DeleteIcon fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -161,13 +219,21 @@ export default function FormsTable({ onEdit }) {
 
   return (
     <>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2.5}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={2.5}
+      >
         <TextField
           size="small"
           placeholder="Search forms..."
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          sx={{ width: { xs: "100%", sm: 300 }, "& .MuiOutlinedInput-root": { bgcolor: "#fff" } }}
+          sx={{
+            width: { xs: "100%", sm: 300 },
+            "& .MuiOutlinedInput-root": { bgcolor: "#fff" },
+          }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -184,10 +250,21 @@ export default function FormsTable({ onEdit }) {
       {rows.length === 0 ? (
         <EmptyState
           title={search ? "No forms match your search" : "No forms yet"}
-          description={search ? "Try a different keyword." : "Click \"New Form\" above to create your first form."}
+          description={
+            search
+              ? "Try a different keyword."
+              : 'Click "New Form" above to create your first form.'
+          }
         />
       ) : (
-        <Box sx={{ border: "1px solid #e4e4e7", borderRadius: 2, bgcolor: "#fff", overflow: "hidden" }}>
+        <Box
+          sx={{
+            border: "1px solid #e4e4e7",
+            borderRadius: 2,
+            bgcolor: "#fff",
+            overflow: "hidden",
+          }}
+        >
           <DataGrid
             autoHeight
             rows={rows}
@@ -204,7 +281,10 @@ export default function FormsTable({ onEdit }) {
             getRowHeight={() => 64}
             sx={{
               border: "none",
-              "& .MuiDataGrid-columnHeaders": { bgcolor: "#fafafa", borderBottom: "1px solid #e4e4e7" },
+              "& .MuiDataGrid-columnHeaders": {
+                bgcolor: "#fafafa",
+                borderBottom: "1px solid #e4e4e7",
+              },
               "& .MuiDataGrid-columnHeaderTitle": {
                 fontWeight: 700,
                 fontSize: 12.5,
@@ -214,7 +294,9 @@ export default function FormsTable({ onEdit }) {
               },
               "& .MuiDataGrid-cell": { borderBottom: "1px solid #f4f4f5" },
               "& .MuiDataGrid-row:hover": { bgcolor: "#fafafa" },
-              "& .MuiDataGrid-footerContainer": { borderTop: "1px solid #e4e4e7" },
+              "& .MuiDataGrid-footerContainer": {
+                borderTop: "1px solid #e4e4e7",
+              },
             }}
           />
         </Box>

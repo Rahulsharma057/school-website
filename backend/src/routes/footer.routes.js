@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const {
-  getFooter,
+  getFooter, getPublicFooter,
   updateFooter,
   uploadLogo,
   removeLogo,
@@ -18,8 +18,8 @@ const allowRoles = require("../middlewares/roleMiddleware");
 // public site and isn't sensitive data. The admin builder loads its
 // current state from this same endpoint.
 router.get("/", getFooter);
+router.get("/public", getPublicFooter); 
 
-// ADMIN
 router.put("/", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"), updateFooter);
 
 router.post(

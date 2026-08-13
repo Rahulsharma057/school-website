@@ -65,12 +65,16 @@ const buildColumnsFromForm = (form) =>
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ALLOWED_STATUSES = ["pending", "approved", "rejected", "archived"];
 
-const escapeRegex = (str = "") => String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (str = "") =>
+  String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const parseStatusFilter = (status) => {
   if (!status) return undefined;
   if (typeof status !== "string" || !ALLOWED_STATUSES.includes(status)) {
-    throw new ApiError(400, `status must be one of: ${ALLOWED_STATUSES.join(", ")}`);
+    throw new ApiError(
+      400,
+      `status must be one of: ${ALLOWED_STATUSES.join(", ")}`,
+    );
   }
   return status;
 };
@@ -84,7 +88,7 @@ const parseDateFilter = (value, label) => {
   return date;
 };
 
-// FIX: evaluates ONE conditional rule.
+// Evaluates ONE conditional rule.
 const evaluateRule = (rule, values) => {
   const watchedValue = values?.[rule.fieldName];
   const target = rule.value ?? "";
@@ -94,20 +98,27 @@ const evaluateRule = (rule, values) => {
     return arr.map((v) => String(v)).includes(target);
   }
 
-  const asString = watchedValue === undefined || watchedValue === null ? "" : String(watchedValue);
+  const asString =
+    watchedValue === undefined || watchedValue === null
+      ? ""
+      : String(watchedValue);
   if (rule.operator === "notEquals") return asString !== target;
   return asString === target;
 };
 
-// FIX: a field's visibility is now the AND/OR combination of ALL its
-// rules — mirrors exactly what FormRenderer/FormEditRenderer compute
+// A field's visibility is the AND/OR combination of ALL its rules —
+// mirrors exactly what FormRenderer/FormEditRenderer/EditPortal compute
 // client-side, so a hidden field is never required, validated, or
 // stored on either the client or server.
 const isFieldVisible = (field, rawData) => {
-  if (!field.conditional?.enabled || !field.conditional?.rules?.length) return true;
-
-  const results = field.conditional.rules.map((rule) => evaluateRule(rule, rawData));
-  return field.conditional.logic === "OR" ? results.some(Boolean) : results.every(Boolean);
+  if (!field.conditional?.enabled || !field.conditional?.rules?.length)
+    return true;
+  const results = field.conditional.rules.map((rule) =>
+    evaluateRule(rule, rawData),
+  );
+  return field.conditional.logic === "OR"
+    ? results.some(Boolean)
+    : results.every(Boolean);
 };
 
 const validateEntryData = (form, rawData, filesByField) => {
@@ -120,14 +131,20 @@ const validateEntryData = (form, rawData, filesByField) => {
 
     if (!isFieldVisible(field, rawData)) continue;
 
-    // FIX: a field can be required unconditionally (`field.required`) OR
-    // only while its condition is true (`requiredWhenVisible`) — since
-    // we already know it's visible at this point, requiredWhenVisible
-    // effectively forces required=true here.
-    const effectiveRequired = field.conditional?.enabled && field.conditional?.requiredWhenVisible ? true : field.required;
+    // A field is required unconditionally, OR only while conditionally
+    // visible — since we already know it's visible here,
+    // requiredWhenVisible effectively forces required=true.
+    const effectiveRequired =
+      field.conditional?.enabled && field.conditional?.requiredWhenVisible
+        ? true
+        : field.required;
 
     const raw = rawData[field.name];
-    const isEmpty = raw === undefined || raw === null || raw === "" || (Array.isArray(raw) && raw.length === 0);
+    const isEmpty =
+      raw === undefined ||
+      raw === null ||
+      raw === "" ||
+      (Array.isArray(raw) && raw.length === 0);
 
     if (field.type === "file") {
       const uploaded = filesByField[field.name] || [];
@@ -138,7 +155,9 @@ const validateEntryData = (form, rawData, filesByField) => {
       }
 
       if (uploaded.length > (field.maxFiles || 1)) {
-        errors.push(`"${field.label}" allows at most ${field.maxFiles || 1} file(s)`);
+        errors.push(
+          `"${field.label}" allows at most ${field.maxFiles || 1} file(s)`,
+        );
         continue;
       }
 
@@ -147,12 +166,16 @@ const validateEntryData = (form, rawData, filesByField) => {
 
         const allowedTypes = field.accept?.length ? field.accept : [];
         if (allowedTypes.length && !allowedTypes.includes(file.mimetype)) {
-          errors.push(`"${field.label}" only accepts: ${allowedTypes.join(", ")} (got ${file.mimetype})`);
+          errors.push(
+            `"${field.label}" only accepts: ${allowedTypes.join(", ")} (got ${file.mimetype})`,
+          );
         }
 
         const maxBytes = (field.maxFileSizeMB || 5) * 1024 * 1024;
         if (file.size > maxBytes) {
-          errors.push(`"${field.label}" file exceeds ${field.maxFileSizeMB || 5}MB`);
+          errors.push(
+            `"${field.label}" file exceeds ${field.maxFileSizeMB || 5}MB`,
+          );
         }
       }
 
@@ -175,11 +198,15 @@ const validateEntryData = (form, rawData, filesByField) => {
           break;
         }
         if (field.minLength && str.length < field.minLength) {
-          errors.push(`"${field.label}" must be at least ${field.minLength} characters`);
+          errors.push(
+            `"${field.label}" must be at least ${field.minLength} characters`,
+          );
           break;
         }
         if (field.maxLength && str.length > field.maxLength) {
-          errors.push(`"${field.label}" must be at most ${field.maxLength} characters`);
+          errors.push(
+            `"${field.label}" must be at most ${field.maxLength} characters`,
+          );
           break;
         }
         if (["select", "radio"].includes(field.type) && field.options?.length) {
@@ -230,7 +257,9 @@ const validateEntryData = (form, rawData, filesByField) => {
         if (field.type === "checkbox" && field.options?.length) {
           const invalid = arr.filter((v) => !field.options.includes(v));
           if (invalid.length) {
-            errors.push(`"${field.label}" has invalid option(s): ${invalid.join(", ")}`);
+            errors.push(
+              `"${field.label}" has invalid option(s): ${invalid.join(", ")}`,
+            );
             break;
           }
         }
@@ -250,10 +279,10 @@ const validateEntryData = (form, rawData, filesByField) => {
   return cleanData;
 };
 
-// FIX: best-effort notifications, fired after the entry is safely saved.
+// Best-effort notifications, fired after the entry is safely saved.
 // Never throws, never awaited by the response — a broken SMTP config or
 // dead webhook endpoint must never fail or delay the visitor's submission.
-const sendSubmissionNotifications = async ({ form, entry, cleanData }) => {
+const sendSubmissionNotifications = async ({ form, entry }) => {
   const tasks = [];
 
   if (form.notifyEmail) {
@@ -262,19 +291,32 @@ const sendSubmissionNotifications = async ({ form, entry, cleanData }) => {
         to: form.notifyEmail,
         subject: `New submission: ${form.title}`,
         html: `<p>A new response was submitted to "<b>${form.title}</b>".</p><p>Submitter: ${
-          entry.submitterName || entry.submitterEmail || entry.submitterPhone || "(no contact info)"
+          entry.submitterName ||
+          entry.submitterEmail ||
+          entry.submitterPhone ||
+          "(no contact info)"
         }</p>`,
       }),
     );
   }
 
   if (form.submission?.autoResponder?.enabled && entry.submitterEmail) {
-    const subject = form.submission.autoResponder.subject || "We received your submission";
-    const message = (form.submission.autoResponder.message || "Thanks for submitting {{formTitle}}. We'll be in touch soon.")
+    const subject =
+      form.submission.autoResponder.subject || "We received your submission";
+    const message = (
+      form.submission.autoResponder.message ||
+      "Thanks for submitting {{formTitle}}. We'll be in touch soon."
+    )
       .replace(/{{\s*formTitle\s*}}/gi, form.title)
       .replace(/{{\s*name\s*}}/gi, entry.submitterName || "");
 
-    tasks.push(sendMail({ to: entry.submitterEmail, subject, html: `<p>${message}</p>` }));
+    tasks.push(
+      sendMail({
+        to: entry.submitterEmail,
+        subject,
+        html: `<p>${message}</p>`,
+      }),
+    );
   }
 
   if (form.notifications?.webhookEnabled && form.notifications?.webhookUrl) {
@@ -287,7 +329,6 @@ const sendSubmissionNotifications = async ({ form, entry, cleanData }) => {
         submitterName: entry.submitterName,
         submitterEmail: entry.submitterEmail,
         submitterPhone: entry.submitterPhone,
-        data: cleanData,
         submittedAt: entry.createdAt,
       }),
     );
@@ -319,13 +360,18 @@ const submitEntry = asyncHandler(async (req, res) => {
     }
   }
 
-  // FIX: honeypot check — a real visitor never sees or fills this field
+  // Honeypot check — a real visitor never sees or fills this field
   // (hidden via CSS in the renderer); if it has a value, this is almost
   // certainly a bot. Respond exactly like a normal success so the bot
   // doesn't learn its submission was rejected, but never actually save
   // anything.
-  if (form.antiSpam?.honeypotEnabled !== false && req.body[HONEYPOT_FIELD_NAME]) {
-    return res.status(201).json(new ApiResponse(201, { _id: null, editToken: null }, "Form submitted successfully"));
+  if (
+    form.antiSpam?.honeypotEnabled !== false &&
+    req.body[HONEYPOT_FIELD_NAME]
+  ) {
+    return res
+      .status(201)
+      .json(new ApiResponse(201, { _id: null }, "Form submitted successfully"));
   }
 
   const rawData = parseJson(req.body.data, {});
@@ -342,12 +388,16 @@ const submitEntry = asyncHandler(async (req, res) => {
 
   const cleanData = validateEntryData(form, rawData, filesByField);
 
-  const { submitterName, submitterEmail, submitterPhone } = extractSubmitterInfo(cleanData);
+  const { submitterName, submitterEmail, submitterPhone } =
+    extractSubmitterInfo(cleanData);
 
-  // FIX: duplicate-submission guard — blocks the same submitter (by
-  // email or phone) from submitting this same form again within the
-  // configured window, before any files are uploaded.
-  if (form.antiSpam?.duplicateCheck?.enabled && (submitterEmail || submitterPhone)) {
+  // Duplicate-submission guard — blocks the same submitter (by email or
+  // phone) from submitting this same form again within the configured
+  // window, before any files are uploaded.
+  if (
+    form.antiSpam?.duplicateCheck?.enabled &&
+    (submitterEmail || submitterPhone)
+  ) {
     const windowHours = form.antiSpam.duplicateCheck.windowHours || 24;
     const since = new Date(Date.now() - windowHours * 60 * 60 * 1000);
 
@@ -363,12 +413,19 @@ const submitEntry = asyncHandler(async (req, res) => {
     });
 
     if (isDuplicate) {
-      throw new ApiError(429, "You've already submitted this form recently. Please try again later.");
+      throw new ApiError(
+        429,
+        "You've already submitted this form recently. Please try again later.",
+      );
     }
   }
 
-  const fileFieldNames = new Set(form.fields.filter((f) => f.type === "file").map((f) => f.name));
-  const filesToUpload = (req.files || []).filter((f) => fileFieldNames.has(f.fieldname));
+  const fileFieldNames = new Set(
+    form.fields.filter((f) => f.type === "file").map((f) => f.name),
+  );
+  const filesToUpload = (req.files || []).filter((f) =>
+    fileFieldNames.has(f.fieldname),
+  );
 
   const uploadedFiles = [];
 
@@ -389,13 +446,19 @@ const submitEntry = asyncHandler(async (req, res) => {
       });
     }
 
+    // A token is always issued when the form allows self-edit — the
+    // Edit Portal reuses this token internally (never emailed/shown to
+    // the submitter directly); the portal itself is the only surface
+    // that exposes editing.
     let editToken = null;
     let editTokenExpiresAt = null;
 
     if (form.submission?.allowSubmitterEdit) {
       editToken = crypto.randomBytes(24).toString("hex");
       editTokenExpiresAt = form.submission.editWindowHours
-        ? new Date(Date.now() + form.submission.editWindowHours * 60 * 60 * 1000)
+        ? new Date(
+            Date.now() + form.submission.editWindowHours * 60 * 60 * 1000,
+          )
         : null;
     }
 
@@ -417,14 +480,21 @@ const submitEntry = asyncHandler(async (req, res) => {
       editTokenExpiresAt,
     });
 
-    Form.updateOne({ _id: form._id }, { $inc: { entryCount: 1 } }).catch(() => {});
+    Form.updateOne({ _id: form._id }, { $inc: { entryCount: 1 } }).catch(
+      () => {},
+    );
 
-    // Fire-and-forget — never blocks the response.
-    sendSubmissionNotifications({ form, entry, cleanData }).catch(() => {});
+    sendSubmissionNotifications({ form, entry }).catch(() => {});
 
-    return res.status(201).json(new ApiResponse(201, entry, "Form submitted successfully"));
+    return res
+      .status(201)
+      .json(new ApiResponse(201, entry, "Form submitted successfully"));
   } catch (err) {
-    await Promise.all(uploadedFiles.map((f) => deleteFromCloudinary(f.public_id).catch(() => {})));
+    await Promise.all(
+      uploadedFiles.map((f) =>
+        deleteFromCloudinary(f.public_id).catch(() => {}),
+      ),
+    );
     throw err;
   }
 });
@@ -435,7 +505,8 @@ const getEntries = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(Math.max(1, Number(req.query.limit) || 10), 100);
 
-  const { formId, status, search, dateFrom, dateTo, includeDeleted } = req.query;
+  const { formId, status, search, dateFrom, dateTo, includeDeleted } =
+    req.query;
 
   const filter = {};
 
@@ -473,11 +544,19 @@ const getEntries = asyncHandler(async (req, res) => {
 
   const [total, data] = await Promise.all([
     FormEntry.countDocuments(filter),
-    FormEntry.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    FormEntry.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
   ]);
 
   return res.json(
-    new ApiResponse(200, { data, total, page, limit, totalPages: Math.ceil(total / limit) }, "Entries fetched successfully"),
+    new ApiResponse(
+      200,
+      { data, total, page, limit, totalPages: Math.ceil(total / limit) },
+      "Entries fetched successfully",
+    ),
   );
 });
 
@@ -519,14 +598,23 @@ const getEntriesByTableSlug = asyncHandler(async (req, res) => {
 
   const [total, data] = await Promise.all([
     FormEntry.countDocuments(filter),
-    FormEntry.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    FormEntry.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
   ]);
 
   return res.json(
     new ApiResponse(
       200,
       {
-        form: { _id: form._id, title: form.title, slug: form.slug, adminTableSlug: form.adminTableSlug },
+        form: {
+          _id: form._id,
+          title: form.title,
+          slug: form.slug,
+          adminTableSlug: form.adminTableSlug,
+        },
         columns: buildColumnsFromForm(form),
         data,
         total,
@@ -547,7 +635,69 @@ const getEntry = asyncHandler(async (req, res) => {
   return res.json(new ApiResponse(200, entry, "Entry fetched successfully"));
 });
 
-// ================= PUBLIC — FETCH FOR SELF-SERVICE EDIT (by token) =================
+// ================= PUBLIC — EDIT PORTAL: LOOKUP =================
+// Admin shares ONE stable link per form: /forms/portal/:slug — never
+// tied to a specific submission. A visitor enters the email or phone
+// they used when submitting; if it matches an entry for this form,
+// that entry (with a fresh/valid editToken) is returned so the
+// frontend can immediately render it for editing. Gated entirely by
+// form.submission.allowSubmitterEdit — admin flips that off and this
+// route always responds "closed", regardless of what data exists.
+
+const lookupEntryForEdit = asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+  const { identifier } = req.body;
+
+  if (!identifier || !identifier.trim()) {
+    throw new ApiError(400, "Enter the email or phone number used to submit");
+  }
+
+  const form = await Form.findOne({ slug }).lean();
+
+  if (!form) {
+    throw new ApiError(404, "Form not found");
+  }
+
+  if (!form.submission?.allowSubmitterEdit) {
+    throw new ApiError(403, "Editing is currently closed for this form");
+  }
+
+  const clean = identifier.trim();
+
+  const entry = await FormEntry.findOne({
+    formId: form._id,
+    isDeleted: false,
+    $or: [{ submitterEmail: clean.toLowerCase() }, { submitterPhone: clean }],
+  }).sort({ createdAt: -1 });
+
+  if (!entry) {
+    throw new ApiError(
+      404,
+      "No submission found matching that email or phone number",
+    );
+  }
+
+  // Older entries (submitted before allowSubmitterEdit was turned on,
+  // or whose token already expired) may have no usable token — issue a
+  // fresh one on the fly so the portal always works once the admin has
+  // the feature enabled, regardless of submission history.
+  const tokenValid =
+    entry.editToken &&
+    (!entry.editTokenExpiresAt ||
+      new Date(entry.editTokenExpiresAt) > new Date());
+
+  if (!tokenValid) {
+    entry.editToken = crypto.randomBytes(24).toString("hex");
+    entry.editTokenExpiresAt = form.submission.editWindowHours
+      ? new Date(Date.now() + form.submission.editWindowHours * 60 * 60 * 1000)
+      : null;
+    await entry.save();
+  }
+
+  return res.json(new ApiResponse(200, { entry, form }, "Submission found"));
+});
+
+// ================= PUBLIC — FETCH FOR EDIT (by token, used internally by the portal) =================
 
 const getEntryByEditToken = asyncHandler(async (req, res) => {
   const { token } = req.params;
@@ -555,21 +705,27 @@ const getEntryByEditToken = asyncHandler(async (req, res) => {
   const entry = await FormEntry.findOne({ editToken: token }).lean();
   if (!entry) throw new ApiError(404, "Invalid or expired edit link");
 
-  if (entry.editTokenExpiresAt && new Date(entry.editTokenExpiresAt) < new Date()) {
+  if (
+    entry.editTokenExpiresAt &&
+    new Date(entry.editTokenExpiresAt) < new Date()
+  ) {
     throw new ApiError(410, "This edit link has expired");
   }
 
   const form = await Form.findById(entry.formId).lean();
-  if (!form) throw new ApiError(404, "The form for this submission no longer exists");
+  if (!form)
+    throw new ApiError(404, "The form for this submission no longer exists");
 
   if (!form.submission?.allowSubmitterEdit) {
     throw new ApiError(403, "Editing is no longer allowed for this form");
   }
 
-  return res.json(new ApiResponse(200, { entry, form }, "Entry fetched successfully"));
+  return res.json(
+    new ApiResponse(200, { entry, form }, "Entry fetched successfully"),
+  );
 });
 
-// ================= PUBLIC — SELF-SERVICE UPDATE (by token) =================
+// ================= PUBLIC — UPDATE (by token, used internally by the portal) =================
 
 const updateEntryByEditToken = asyncHandler(async (req, res) => {
   const { token } = req.params;
@@ -577,7 +733,10 @@ const updateEntryByEditToken = asyncHandler(async (req, res) => {
   const entry = await FormEntry.findOne({ editToken: token });
   if (!entry) throw new ApiError(404, "Invalid or expired edit link");
 
-  if (entry.editTokenExpiresAt && new Date(entry.editTokenExpiresAt) < new Date()) {
+  if (
+    entry.editTokenExpiresAt &&
+    new Date(entry.editTokenExpiresAt) < new Date()
+  ) {
     throw new ApiError(410, "This edit link has expired");
   }
 
@@ -593,7 +752,8 @@ const updateEntryByEditToken = asyncHandler(async (req, res) => {
 
   const existingFilesByField = {};
   for (const f of entry.files || []) {
-    if (!existingFilesByField[f.fieldName]) existingFilesByField[f.fieldName] = [];
+    if (!existingFilesByField[f.fieldName])
+      existingFilesByField[f.fieldName] = [];
     existingFilesByField[f.fieldName].push(f);
   }
 
@@ -612,8 +772,12 @@ const updateEntryByEditToken = asyncHandler(async (req, res) => {
 
   try {
     if (incomingFiles.length) {
-      const fileFieldNames = new Set(form.fields.filter((f) => f.type === "file").map((f) => f.name));
-      const filesToUpload = incomingFiles.filter((f) => fileFieldNames.has(f.fieldname));
+      const fileFieldNames = new Set(
+        form.fields.filter((f) => f.type === "file").map((f) => f.name),
+      );
+      const filesToUpload = incomingFiles.filter((f) =>
+        fileFieldNames.has(f.fieldname),
+      );
 
       for (const file of filesToUpload) {
         const uploaded = await uploadToCloudinary(file, {
@@ -632,28 +796,48 @@ const updateEntryByEditToken = asyncHandler(async (req, res) => {
       }
 
       if (uploadedFiles.length) {
-        const replacedFieldNames = new Set(uploadedFiles.map((f) => f.fieldName));
-        const toDelete = (entry.files || []).filter((f) => replacedFieldNames.has(f.fieldName));
-        await Promise.all(toDelete.map((f) => deleteFromCloudinary(f.public_id).catch(() => {})));
+        const replacedFieldNames = new Set(
+          uploadedFiles.map((f) => f.fieldName),
+        );
+        const toDelete = (entry.files || []).filter((f) =>
+          replacedFieldNames.has(f.fieldName),
+        );
+        await Promise.all(
+          toDelete.map((f) =>
+            deleteFromCloudinary(f.public_id).catch(() => {}),
+          ),
+        );
 
-        entry.files = [...(entry.files || []).filter((f) => !replacedFieldNames.has(f.fieldName)), ...uploadedFiles];
+        entry.files = [
+          ...(entry.files || []).filter(
+            (f) => !replacedFieldNames.has(f.fieldName),
+          ),
+          ...uploadedFiles,
+        ];
       }
     }
 
     entry.data = cleanData;
 
-    const { submitterName, submitterEmail, submitterPhone } = extractSubmitterInfo(cleanData);
+    const { submitterName, submitterEmail, submitterPhone } =
+      extractSubmitterInfo(cleanData);
     entry.submitterName = submitterName || entry.submitterName;
     entry.submitterEmail = submitterEmail || entry.submitterEmail;
     entry.submitterPhone = submitterPhone || entry.submitterPhone;
 
     await entry.save();
   } catch (err) {
-    await Promise.all(uploadedFiles.map((f) => deleteFromCloudinary(f.public_id).catch(() => {})));
+    await Promise.all(
+      uploadedFiles.map((f) =>
+        deleteFromCloudinary(f.public_id).catch(() => {}),
+      ),
+    );
     throw err;
   }
 
-  return res.json(new ApiResponse(200, entry, "Your response has been updated"));
+  return res.json(
+    new ApiResponse(200, entry, "Your response has been updated"),
+  );
 });
 
 // ================= UPDATE (admin) =================
@@ -672,15 +856,21 @@ const updateEntry = asyncHandler(async (req, res) => {
 
   const form = await Form.findById(entry.formId).lean();
 
-  const rawData = hasDataUpdate ? parseJson(req.body.data, entry.data) : entry.data;
+  const rawData = hasDataUpdate
+    ? parseJson(req.body.data, entry.data)
+    : entry.data;
 
-  if (hasDataUpdate && (!rawData || typeof rawData !== "object" || Array.isArray(rawData))) {
+  if (
+    hasDataUpdate &&
+    (!rawData || typeof rawData !== "object" || Array.isArray(rawData))
+  ) {
     throw new ApiError(400, "Submitted data must be an object");
   }
 
   const existingFilesByField = {};
   for (const f of entry.files || []) {
-    if (!existingFilesByField[f.fieldName]) existingFilesByField[f.fieldName] = [];
+    if (!existingFilesByField[f.fieldName])
+      existingFilesByField[f.fieldName] = [];
     existingFilesByField[f.fieldName].push(f);
   }
 
@@ -692,14 +882,20 @@ const updateEntry = asyncHandler(async (req, res) => {
 
   const combinedFilesByField = { ...existingFilesByField, ...newFilesByField };
 
-  const cleanData = form ? validateEntryData(form, rawData, combinedFilesByField) : rawData;
+  const cleanData = form
+    ? validateEntryData(form, rawData, combinedFilesByField)
+    : rawData;
 
   const uploadedFiles = [];
 
   try {
     if (hasFileUpdate && form) {
-      const fileFieldNames = new Set(form.fields.filter((f) => f.type === "file").map((f) => f.name));
-      const filesToUpload = incomingFiles.filter((f) => fileFieldNames.has(f.fieldname));
+      const fileFieldNames = new Set(
+        form.fields.filter((f) => f.type === "file").map((f) => f.name),
+      );
+      const filesToUpload = incomingFiles.filter((f) =>
+        fileFieldNames.has(f.fieldname),
+      );
 
       for (const file of filesToUpload) {
         const uploaded = await uploadToCloudinary(file, {
@@ -718,18 +914,32 @@ const updateEntry = asyncHandler(async (req, res) => {
       }
 
       if (uploadedFiles.length) {
-        const replacedFieldNames = new Set(uploadedFiles.map((f) => f.fieldName));
-        const toDelete = (entry.files || []).filter((f) => replacedFieldNames.has(f.fieldName));
-        await Promise.all(toDelete.map((f) => deleteFromCloudinary(f.public_id).catch(() => {})));
+        const replacedFieldNames = new Set(
+          uploadedFiles.map((f) => f.fieldName),
+        );
+        const toDelete = (entry.files || []).filter((f) =>
+          replacedFieldNames.has(f.fieldName),
+        );
+        await Promise.all(
+          toDelete.map((f) =>
+            deleteFromCloudinary(f.public_id).catch(() => {}),
+          ),
+        );
 
-        entry.files = [...(entry.files || []).filter((f) => !replacedFieldNames.has(f.fieldName)), ...uploadedFiles];
+        entry.files = [
+          ...(entry.files || []).filter(
+            (f) => !replacedFieldNames.has(f.fieldName),
+          ),
+          ...uploadedFiles,
+        ];
       }
     }
 
     if (hasDataUpdate) {
       entry.data = cleanData;
 
-      const { submitterName, submitterEmail, submitterPhone } = extractSubmitterInfo(cleanData);
+      const { submitterName, submitterEmail, submitterPhone } =
+        extractSubmitterInfo(cleanData);
       entry.submitterName = submitterName || entry.submitterName;
       entry.submitterEmail = submitterEmail || entry.submitterEmail;
       entry.submitterPhone = submitterPhone || entry.submitterPhone;
@@ -737,7 +947,11 @@ const updateEntry = asyncHandler(async (req, res) => {
 
     await entry.save();
   } catch (err) {
-    await Promise.all(uploadedFiles.map((f) => deleteFromCloudinary(f.public_id).catch(() => {})));
+    await Promise.all(
+      uploadedFiles.map((f) =>
+        deleteFromCloudinary(f.public_id).catch(() => {}),
+      ),
+    );
     throw err;
   }
 
@@ -750,7 +964,10 @@ const updateEntryStatus = asyncHandler(async (req, res) => {
   const { status, note } = req.body;
 
   if (!ALLOWED_STATUSES.includes(status)) {
-    throw new ApiError(400, `status must be one of: ${ALLOWED_STATUSES.join(", ")}`);
+    throw new ApiError(
+      400,
+      `status must be one of: ${ALLOWED_STATUSES.join(", ")}`,
+    );
   }
 
   const entry = await FormEntry.findById(req.params.id);
@@ -813,7 +1030,15 @@ const duplicateEntry = asyncHandler(async (req, res) => {
   const source = await FormEntry.findById(req.params.id).lean();
   if (!source) throw new ApiError(404, "Entry not found");
 
-  const { _id, createdAt, updatedAt, files, editToken, editTokenExpiresAt, ...rest } = source;
+  const {
+    _id,
+    createdAt,
+    updatedAt,
+    files,
+    editToken,
+    editTokenExpiresAt,
+    ...rest
+  } = source;
 
   const duplicate = await FormEntry.create({
     ...rest,
@@ -828,12 +1053,21 @@ const duplicateEntry = asyncHandler(async (req, res) => {
     editTokenExpiresAt: null,
   });
 
-  return res.status(201).json(new ApiResponse(201, duplicate, "Entry duplicated successfully"));
+  return res
+    .status(201)
+    .json(new ApiResponse(201, duplicate, "Entry duplicated successfully"));
 });
 
 // ================= BULK ACTIONS =================
 
-const BULK_ACTIONS = ["approve", "reject", "archive", "delete", "restore", "permanentlyDelete"];
+const BULK_ACTIONS = [
+  "approve",
+  "reject",
+  "archive",
+  "delete",
+  "restore",
+  "permanentlyDelete",
+];
 const MAX_BULK_IDS = 500;
 
 const bulkAction = asyncHandler(async (req, res) => {
@@ -844,11 +1078,17 @@ const bulkAction = asyncHandler(async (req, res) => {
   }
 
   if (ids.length > MAX_BULK_IDS) {
-    throw new ApiError(400, `You can only act on up to ${MAX_BULK_IDS} entries at once`);
+    throw new ApiError(
+      400,
+      `You can only act on up to ${MAX_BULK_IDS} entries at once`,
+    );
   }
 
   if (!BULK_ACTIONS.includes(action)) {
-    throw new ApiError(400, `action must be one of: ${BULK_ACTIONS.join(", ")}`);
+    throw new ApiError(
+      400,
+      `action must be one of: ${BULK_ACTIONS.join(", ")}`,
+    );
   }
 
   const invalidIds = ids.filter((id) => !mongoose.Types.ObjectId.isValid(id));
@@ -867,10 +1107,20 @@ const bulkAction = asyncHandler(async (req, res) => {
 
     await FormEntry.deleteMany({ _id: { $in: ids } });
 
-    return res.json(new ApiResponse(200, { deletedCount: entries.length }, "Entries permanently deleted"));
+    return res.json(
+      new ApiResponse(
+        200,
+        { deletedCount: entries.length },
+        "Entries permanently deleted",
+      ),
+    );
   }
 
-  const statusMap = { approve: "approved", reject: "rejected", archive: "archived" };
+  const statusMap = {
+    approve: "approved",
+    reject: "rejected",
+    archive: "archived",
+  };
 
   let update;
   if (statusMap[action]) {
@@ -889,7 +1139,14 @@ const bulkAction = asyncHandler(async (req, res) => {
   const result = await FormEntry.updateMany({ _id: { $in: ids } }, update);
 
   return res.json(
-    new ApiResponse(200, { matchedCount: result.matchedCount, modifiedCount: result.modifiedCount }, `Bulk ${action} applied`),
+    new ApiResponse(
+      200,
+      {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+      },
+      `Bulk ${action} applied`,
+    ),
   );
 });
 
@@ -907,7 +1164,8 @@ const exportEntriesCSV = asyncHandler(async (req, res) => {
   const filter = { isDeleted: false };
 
   if (formId) {
-    if (!mongoose.Types.ObjectId.isValid(formId)) throw new ApiError(400, "Invalid formId");
+    if (!mongoose.Types.ObjectId.isValid(formId))
+      throw new ApiError(400, "Invalid formId");
     filter.formId = formId;
   }
 
@@ -917,31 +1175,55 @@ const exportEntriesCSV = asyncHandler(async (req, res) => {
   const exists = await FormEntry.exists(filter);
   if (!exists) throw new ApiError(404, "No entries to export");
 
-  const fixedColumns = ["_id", "formTitle", "status", "submitterName", "submitterEmail", "submitterPhone", "createdAt"];
+  const fixedColumns = [
+    "_id",
+    "formTitle",
+    "status",
+    "submitterName",
+    "submitterEmail",
+    "submitterPhone",
+    "createdAt",
+  ];
 
   let dynamicKeys = [];
 
   if (formId) {
     const form = await Form.findById(formId).select("fields").lean();
-    dynamicKeys = (form?.fields || []).filter((f) => f.type !== "section").map((f) => f.name);
+    dynamicKeys = (form?.fields || [])
+      .filter((f) => f.type !== "section")
+      .map((f) => f.name);
   } else {
-    const sample = await FormEntry.find(filter).select("data").limit(200).lean();
+    const sample = await FormEntry.find(filter)
+      .select("data")
+      .limit(200)
+      .lean();
     const keySet = new Set();
-    sample.forEach((e) => Object.keys(e.data || {}).forEach((k) => keySet.add(k)));
+    sample.forEach((e) =>
+      Object.keys(e.data || {}).forEach((k) => keySet.add(k)),
+    );
     dynamicKeys = Array.from(keySet);
   }
 
   const columns = [...fixedColumns, ...dynamicKeys];
 
   res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", `attachment; filename="form-entries-${Date.now()}.csv"`);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="form-entries-${Date.now()}.csv"`,
+  );
 
   res.write(columns.join(",") + "\n");
 
   const cursor = FormEntry.find(filter).sort({ createdAt: -1 }).lean().cursor();
 
   for await (const e of cursor) {
-    const row = columns.map((col) => (fixedColumns.includes(col) ? escapeCsv(e[col]) : escapeCsv(e.data?.[col]))).join(",");
+    const row = columns
+      .map((col) =>
+        fixedColumns.includes(col)
+          ? escapeCsv(e[col])
+          : escapeCsv(e.data?.[col]),
+      )
+      .join(",");
     res.write(row + "\n");
   }
 
@@ -953,6 +1235,7 @@ module.exports = {
   getEntries,
   getEntriesByTableSlug,
   getEntry,
+  lookupEntryForEdit,
   getEntryByEditToken,
   updateEntryByEditToken,
   updateEntry,

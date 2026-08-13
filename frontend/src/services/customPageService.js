@@ -46,3 +46,7 @@ export const getPublicPage = (slug) =>
 // FIX: NEW — used by app/sitemap.js
 export const getSitemapData = () =>
   api.get("/custom-pages/sitemap-data");
+
+// FIX: NEW — used by the Media Library picker
+export const getMediaLibrary = (params) =>
+  api.get("/custom-pages/media-library", { params });

@@ -214,6 +214,12 @@ const createPage = asyncHandler(async (req, res) => {
       position: body.coverImagePosition || "center",
       borderRadius: Number(body.coverImageBorderRadius || 0),
     };
+  } else if (body.existingCoverImage) {
+    // FIX: NEW — cover image picked from the Media Library (an already-
+    // uploaded Cloudinary asset) rather than a fresh file. No upload
+    // needed, just use the real image object as-is.
+    const existing = parseJsonObject(body.existingCoverImage);
+    if (existing.url && existing.public_id) coverImage = existing;
   }
 
   let gallery = [];
@@ -266,7 +272,9 @@ const createPage = asyncHandler(async (req, res) => {
     pageWidth: body.pageWidth || "large",
     featured: body.featured === "true" || body.featured === true,
     showInNavbar: body.showInNavbar === "true" || body.showInNavbar === true,
+      navbarParentId: body.navbarParentId || null,
     showInFooter: body.showInFooter === "true" || body.showInFooter === true,
+      footerSectionId: body.footerSectionId || null, 
     navbarOrder: Number(body.navbarOrder || 0),
     footerOrder: Number(body.footerOrder || 0),
     status: body.status !== undefined ? body.status !== "false" : true,
@@ -364,6 +372,56 @@ const getSitemapData = asyncHandler(async (req, res) => {
   return res.json(new ApiResponse(200, pages, "Sitemap data fetched successfully"));
 });
 
+// ================= MEDIA LIBRARY (admin) =================
+// FIX: NEW — collects every distinct image already uploaded across all
+// custom pages (cover, gallery, every section image slot, every card
+// image) so the admin can reuse one instead of re-uploading. Dedupes by
+// public_id. No new model/collection — this reads straight off the
+// pages that already reference these Cloudinary assets.
+
+const collectAllImages = (page) => {
+  const found = [];
+
+  const push = (img, sourceTitle) => {
+    if (img?.public_id && img?.url) found.push({ ...img, usedIn: sourceTitle });
+  };
+
+  push(page.coverImage, page.title);
+  (page.gallery || []).forEach((img) => push(img, page.title));
+
+  for (const s of page.sections || []) {
+    push(s.image, page.title);
+    push(s.image2, page.title);
+    push(s.backgroundImage, page.title);
+    (s.images || []).forEach((img) => push(img, page.title));
+    (s.cardItems || []).forEach((card) => push(card.image, page.title));
+  }
+
+  return found;
+};
+
+const getMediaLibrary = asyncHandler(async (req, res) => {
+  const pages = await CustomPage.find({})
+    .select("title coverImage gallery sections.image sections.image2 sections.backgroundImage sections.images sections.cardItems")
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  const byPublicId = new Map();
+
+  for (const page of pages) {
+    for (const img of collectAllImages(page)) {
+      if (!byPublicId.has(img.public_id)) {
+        byPublicId.set(img.public_id, img);
+      }
+    }
+  }
+
+  const limit = Math.min(Number(req.query.limit) || 100, 300);
+  const images = Array.from(byPublicId.values()).slice(0, limit);
+
+  return res.json(new ApiResponse(200, images, "Media library fetched successfully"));
+});
+
 // ================= UPDATE =================
 
 const updatePage = asyncHandler(async (req, res) => {
@@ -395,6 +453,14 @@ const updatePage = asyncHandler(async (req, res) => {
     }
 
     page.coverImage = undefined;
+  } else if (req.body.existingCoverImage) {
+    // FIX: NEW — switched to a Media Library image. Deliberately does
+    // NOT delete the previous coverImage from Cloudinary — that asset
+    // may still be referenced by other pages/sections that reused it
+    // from the library, so only file-upload replacements (the branch
+    // above) get the "delete the old one" treatment.
+    const existing = parseJsonObject(req.body.existingCoverImage);
+    if (existing.url && existing.public_id) page.coverImage = existing;
   }
 
   const removeGalleryIds = new Set(parseJsonArray(req.body.removeGalleryIds));
@@ -470,6 +536,7 @@ const updatePage = asyncHandler(async (req, res) => {
     galleryPosition,
     galleryBorderRadius,
     removeCoverImage,
+    existingCoverImage: _existingCoverImage,
     removeGalleryIds: _removeGalleryIds,
     sections,
     header: _header,
@@ -481,6 +548,8 @@ const updatePage = asyncHandler(async (req, res) => {
 
   Object.assign(page, rest);
 
+page.navbarParentId = rest.navbarParentId || null;   // NEW
+page.footerSectionId = rest.footerSectionId || null; 
   page.slug = slugify(bodySlug || rest.title || page.title);
 
   page.route = bodyRoute
@@ -651,6 +720,7 @@ module.exports = {
   getPage,
   getPublicPage,
   getSitemapData,
+  getMediaLibrary,
   updatePage,
   duplicatePage,
   bulkAction,

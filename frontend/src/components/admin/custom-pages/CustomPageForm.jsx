@@ -37,7 +37,7 @@ import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import RemoveRedEyeIcon from "@mui/icons-material/RemoveRedEye";
 
 import { useForm, Controller } from "react-hook-form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 
 import {
@@ -56,10 +56,13 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { createPage, updatePage } from "@/services/customPageService";
+import { getNavbar } from "@/services/navbarService";
+import { getFooter } from "@/services/footerService";
 
 import SectionsBuilder from "./SectionsBuilder";
 import ImageUploadButtons from "@/components/common/ImageUploadButtons";
 import DynamicPageContent from "./DynamicPageContent";
+import RichTextEditor from "@/components/common/RichTextEditor";
 
 const CONTENT_POSITIONS = [
   "top-left", "top-center", "top-right",
@@ -113,7 +116,20 @@ function DraggableGalleryThumb({ id, src, borderColor, onRemove, children }) {
 export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
   const queryClient = useQueryClient();
 
+  // NEW — needed for the navbar-submenu / footer-section pickers below
+  const { data: navbarData } = useQuery({
+    queryKey: ["navbar", "admin"],
+    queryFn: async () => (await getNavbar()).data,
+  });
+  const { data: footerData } = useQuery({
+    queryKey: ["footer", "admin"],
+    queryFn: async () => (await getFooter()).data,
+  });
+  const navbarMenuOptions = navbarData?.data?.menu || [];
+  const footerSectionOptions = footerData?.data?.sections || [];
+
   const [coverImage, setCoverImage] = useState(null);
+  const [coverImageExisting, setCoverImageExisting] = useState(null); // set when picked from the Media Library instead of uploaded fresh
   const [coverPreview, setCoverPreview] = useState("");
   const [removeCoverImage, setRemoveCoverImage] = useState(false);
 
@@ -145,7 +161,8 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
       title: "", slug: "", route: "", shortDescription: "", content: "",
       buttonText: "", buttonLink: "", seoTitle: "", seoDescription: "", keywords: "",
       pageType: "General", pageWidth: "large",
-      showInNavbar: false, navbarOrder: 0, showInFooter: false, footerOrder: 0,
+      showInNavbar: false, navbarOrder: 0, navbarParentId: "",
+      showInFooter: false, footerOrder: 0, footerSectionId: "",
       featured: false, status: true, order: 0,
       coverImageAlt: "", coverImageObjectFit: "cover", coverImagePosition: "center", coverImageBorderRadius: 0,
       galleryObjectFit: "cover", galleryPosition: "center", galleryBorderRadius: 0,
@@ -163,6 +180,8 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
 
   const headerEnabled = watch("headerEnabled");
   const headerShowBackground = watch("headerShowBackground");
+  const showInNavbarVal = watch("showInNavbar");
+  const showInFooterVal = watch("showInFooter");
 
   useEffect(() => {
     onDirtyChange?.(isDirty || touched);
@@ -208,8 +227,10 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
       pageWidth: editData.pageWidth ?? "large",
       showInNavbar: editData.showInNavbar ?? false,
       navbarOrder: editData.navbarOrder ?? 0,
+      navbarParentId: editData.navbarParentId ?? "",
       showInFooter: editData.showInFooter ?? false,
       footerOrder: editData.footerOrder ?? 0,
+      footerSectionId: editData.footerSectionId ?? "",
       featured: editData.featured ?? false,
       status: editData.status ?? true,
       order: editData.order ?? 0,
@@ -232,6 +253,7 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
 
     setCoverPreview(editData.coverImage?.url || "");
     setCoverImage(null);
+    setCoverImageExisting(null);
     setRemoveCoverImage(false);
     setRemoveGalleryIds([]);
 
@@ -287,6 +309,7 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
       queryClient.invalidateQueries({ queryKey: ["custom-pages"] });
       reset();
       setCoverImage(null);
+      setCoverImageExisting(null);
       setCoverPreview("");
       setRemoveCoverImage(false);
       setGalleryItems([]);
@@ -384,6 +407,8 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
       fd.append("coverImage", coverImage);
     } else if (removeCoverImage) {
       fd.append("removeCoverImage", "true");
+    } else if (coverImageExisting) {
+      fd.append("existingCoverImage", JSON.stringify(coverImageExisting));
     }
 
     // gallery: split the single ordered galleryItems list back into
@@ -406,13 +431,23 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
   const handleCoverFile = (file) => {
     markTouched();
     setCoverImage(file);
+    setCoverImageExisting(null);
     setCoverPreview(URL.createObjectURL(file));
+    setRemoveCoverImage(false);
+  };
+
+  const handleSelectExistingCover = (img) => {
+    markTouched();
+    setCoverImage(null);
+    setCoverImageExisting(img);
+    setCoverPreview(img.url);
     setRemoveCoverImage(false);
   };
 
   const handleRemoveCoverImage = () => {
     markTouched();
     setCoverImage(null);
+    setCoverImageExisting(null);
     setCoverPreview("");
     setRemoveCoverImage(true);
   };
@@ -505,7 +540,23 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
                   <TextField fullWidth multiline rows={3} size="small" label="Short Description" {...register("shortDescription")} />
                 </Grid>
                 <Grid size={12}>
-                  <TextField fullWidth multiline rows={4} size="small" label="Legacy Content" helperText="Optional — prefer using Page Sections below for new pages" {...register("content")} />
+                  <Typography fontSize={13} fontWeight={600} mb={0.75} color="#3f3f46">
+                    Legacy Content <Typography component="span" sx={{ fontSize: 12, color: "#a1a1aa" }}>— optional, prefer Page Sections below for new pages</Typography>
+                  </Typography>
+                  <Controller
+                    name="content"
+                    control={control}
+                    render={({ field }) => (
+                      <RichTextEditor
+                        value={field.value}
+                        onChange={(html) => {
+                          field.onChange(html);
+                          markTouched();
+                        }}
+                        placeholder="Optional legacy content block…"
+                      />
+                    )}
+                  />
                 </Grid>
               </Grid>
             </FormSection>
@@ -603,7 +654,7 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
                     </Box>
                   )}
 
-                  <ImageUploadButtons aspect={21 / 9} onFile={handleCoverFile} label={coverPreview ? "Replace Cover Image" : "Upload Cover Image"} />
+                  <ImageUploadButtons aspect={21 / 9} onFile={handleCoverFile} onSelectExisting={handleSelectExistingCover} label={coverPreview ? "Replace Cover Image" : "Upload Cover Image"} />
                 </Stack>
 
                 <Grid container spacing={2}>
@@ -707,8 +758,6 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
             {/* ================= VISIBILITY ================= */}
             <FormSection icon={<VisibilityIcon />} title="Navigation & Visibility" subtitle="Where this page appears, and whether it's live">
               <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth size="small" type="number" label="Navbar Order" {...register("navbarOrder", { valueAsNumber: true })} /></Grid>
-                <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth size="small" type="number" label="Footer Order" {...register("footerOrder", { valueAsNumber: true })} /></Grid>
                 <Grid size={12}>
                   <Stack direction="row" flexWrap="wrap" columnGap={4} rowGap={0.5}>
                     <Controller name="showInNavbar" control={control} render={({ field }) => (
@@ -725,6 +774,62 @@ export default function CustomPageForm({ editData, clearEdit, onDirtyChange }) {
                     )} />
                   </Stack>
                 </Grid>
+
+                {/* navbar placement — only when "Show In Navbar" is on */}
+                {showInNavbarVal && (
+                  <>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <Controller
+                        name="navbarParentId"
+                        control={control}
+                        render={({ field }) => (
+                          <TextField select fullWidth size="small" label="Navbar Placement" value={field.value || ""} onChange={field.onChange}>
+                            <MenuItem value="">Top-Level Menu Item</MenuItem>
+                            {navbarMenuOptions.map((item) => (
+                              <MenuItem key={item._id} value={item._id}>
+                                Submenu under: {item.title}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        )}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField fullWidth size="small" type="number" label="Navbar Order" {...register("navbarOrder", { valueAsNumber: true })} />
+                    </Grid>
+                  </>
+                )}
+
+                {/* footer placement — only when "Show In Footer" is on */}
+                {showInFooterVal && (
+                  <>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <Controller
+                        name="footerSectionId"
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            label="Footer Section"
+                            value={field.value || ""}
+                            onChange={field.onChange}
+                            helperText={!footerSectionOptions.length ? "No footer sections yet — add one in Footer Builder first" : ""}
+                          >
+                            <MenuItem value="" disabled>Select a section</MenuItem>
+                            {footerSectionOptions.map((s) => (
+                              <MenuItem key={s.id} value={s.id}>{s.title}</MenuItem>
+                            ))}
+                          </TextField>
+                        )}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField fullWidth size="small" type="number" label="Footer Order" {...register("footerOrder", { valueAsNumber: true })} />
+                    </Grid>
+                  </>
+                )}
               </Grid>
             </FormSection>
           </Stack>

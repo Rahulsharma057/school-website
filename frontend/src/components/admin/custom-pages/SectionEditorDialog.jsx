@@ -40,6 +40,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import ImageUploadButtons from "@/components/common/ImageUploadButtons";
+import RichTextEditor from "@/components/common/RichTextEditor";
 
 const SECTION_TYPES = ["hero", "text", "imageText", "gallery", "cards", "video", "cta", "faq", "contact"];
 
@@ -236,7 +237,8 @@ export default function SectionEditorDialog({ open, section, onClose, onSave }) 
             <TextField fullWidth multiline rows={2} size="small" label="Description" value={draft.description} onChange={(e) => patch({ description: e.target.value })} />
           </Grid>
           <Grid size={12}>
-            <TextField fullWidth multiline rows={4} size="small" label="Content" value={draft.content} onChange={(e) => patch({ content: e.target.value })} />
+            <Typography fontSize={13} fontWeight={600} mb={0.75}>Content</Typography>
+            <RichTextEditor value={draft.content} onChange={(html) => patch({ content: html })} placeholder="Write the section's body text — supports bold, links, lists…" />
           </Grid>
 
           <Grid size={12}>
@@ -269,7 +271,7 @@ export default function SectionEditorDialog({ open, section, onClose, onSave }) 
                 </IconButton>
               </Box>
             ) : null}
-            <ImageUploadButtons aspect={16 / 9} onFile={(file) => patch({ image: toPendingImage(file) })} label={draft.image?.url ? "Replace Image" : "Upload Image"} />
+            <ImageUploadButtons aspect={16 / 9} onFile={(file) => patch({ image: toPendingImage(file) })} onSelectExisting={(img) => patch({ image: img })} label={draft.image?.url ? "Replace Image" : "Upload Image"} />
           </Grid>
 
           <Grid size={12}>
@@ -283,7 +285,7 @@ export default function SectionEditorDialog({ open, section, onClose, onSave }) 
                 </IconButton>
               </Box>
             ) : null}
-            <ImageUploadButtons aspect={16 / 9} onFile={(file) => patch({ image2: toPendingImage(file) })} label={draft.image2?.url ? "Replace Image 2" : "Upload Image 2"} />
+            <ImageUploadButtons aspect={16 / 9} onFile={(file) => patch({ image2: toPendingImage(file) })} onSelectExisting={(img) => patch({ image2: img })} label={draft.image2?.url ? "Replace Image 2" : "Upload Image 2"} />
           </Grid>
 
           {/* ---- section background image (any type — a hero-style banner behind the whole section) ---- */}
@@ -304,7 +306,7 @@ export default function SectionEditorDialog({ open, section, onClose, onSave }) 
                 </IconButton>
               </Box>
             ) : null}
-            <ImageUploadButtons aspect={21 / 9} onFile={(file) => patch({ backgroundImage: toPendingImage(file) })} label={draft.backgroundImage?.url ? "Replace Background" : "Upload Background Image"} />
+            <ImageUploadButtons aspect={21 / 9} onFile={(file) => patch({ backgroundImage: toPendingImage(file) })} onSelectExisting={(img) => patch({ backgroundImage: img })} label={draft.backgroundImage?.url ? "Replace Background" : "Upload Background Image"} />
 
             {draft.backgroundImage?.url && (
               <Grid container spacing={1.5} sx={{ mt: 1 }}>
@@ -467,7 +469,7 @@ export default function SectionEditorDialog({ open, section, onClose, onSave }) 
                               <Box sx={{ width: 90, height: 90, borderRadius: 1.5, border: "1px dashed #d4d4d8" }} />
                             )}
                             <Box sx={{ mt: 0.5 }}>
-                              <ImageUploadButtons aspect={1} onFile={(file) => patchCardAt(i, { image: toPendingImage(file) })} label="Image" />
+                              <ImageUploadButtons aspect={1} onFile={(file) => patchCardAt(i, { image: toPendingImage(file) })} onSelectExisting={(img) => patchCardAt(i, { image: img })} label="Image" />
                             </Box>
                           </Box>
 

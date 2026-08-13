@@ -7,6 +7,7 @@ const {
   getEntries,
   getEntriesByTableSlug,
   getEntry,
+  lookupEntryForEdit,
   getEntryByEditToken,
   updateEntryByEditToken,
   updateEntry,
@@ -35,8 +36,14 @@ const entryUpload = upload.any();
 
 router.post("/", submitLimiter, softAuth, entryUpload, submitEntry);
 
-// Self-service edit-by-token — must come before "/:id" so express
-// doesn't try to match "edit" as an :id.
+// Edit Portal — ONE stable link per form (/forms/portal/:slug on the
+// frontend). Visitor identifies themselves by email/phone; this route
+// resolves that to their entry + a valid token.
+router.post("/portal/:slug/lookup", submitLimiter, lookupEntryForEdit);
+
+// Token-based fetch/update — used INTERNALLY by the portal once a
+// lookup succeeds (never exposed as a standalone emailed link). Must
+// come before "/:id" so express doesn't try to match "edit" as an :id.
 router.get("/edit/:token", submitLimiter, getEntryByEditToken);
 router.put("/edit/:token", submitLimiter, entryUpload, updateEntryByEditToken);
 
@@ -55,24 +62,76 @@ router.get(
   getEntriesByTableSlug,
 );
 
-router.get("/export", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"), exportLimiter, exportEntriesCSV);
+router.get(
+  "/export",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"),
+  exportLimiter,
+  exportEntriesCSV,
+);
 
-router.get("/", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"), getEntries);
+router.get(
+  "/",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"),
+  getEntries,
+);
 
-router.post("/bulk", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN"), bulkAction);
+router.post(
+  "/bulk",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN"),
+  bulkAction,
+);
 
-router.get("/:id", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"), getEntry);
+router.get(
+  "/:id",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"),
+  getEntry,
+);
 
-router.patch("/:id", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"), entryUpload, updateEntry);
+router.patch(
+  "/:id",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"),
+  entryUpload,
+  updateEntry,
+);
 
-router.patch("/:id/status", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN"), updateEntryStatus);
+router.patch(
+  "/:id/status",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN"),
+  updateEntryStatus,
+);
 
-router.post("/:id/duplicate", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"), duplicateEntry);
+router.post(
+  "/:id/duplicate",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"),
+  duplicateEntry,
+);
 
-router.patch("/:id/restore", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN"), restoreEntry);
+router.patch(
+  "/:id/restore",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN"),
+  restoreEntry,
+);
 
-router.delete("/:id", authMiddleware, allowRoles("SUPER_ADMIN", "ADMIN"), deleteEntry);
+router.delete(
+  "/:id",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN"),
+  deleteEntry,
+);
 
-router.delete("/:id/permanent", authMiddleware, allowRoles("SUPER_ADMIN"), permanentlyDeleteEntry);
+router.delete(
+  "/:id/permanent",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN"),
+  permanentlyDeleteEntry,
+);
 
 module.exports = router;

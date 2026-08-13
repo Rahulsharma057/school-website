@@ -8,7 +8,7 @@ const { hashPassword, comparePassword } = require("../services/authService");
 const generateToken = require("../utils/generateToken");
 
 exports.registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, phone } = req.body;
 
   const existingUser = await User.findOne({
     email,
@@ -28,6 +28,8 @@ exports.registerUser = asyncHandler(async (req, res) => {
     name,
 
     email,
+
+    phone: phone || null,
 
     password: hashedPassword,
 

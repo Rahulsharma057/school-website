@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 
 import {
   Box,
@@ -20,7 +19,6 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CloseIcon from "@mui/icons-material/Close";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 
 import { toast } from "react-toastify";
 
@@ -29,11 +27,6 @@ import ConfirmationDialog from "@/components/common/ConfirmationDialog";
 const API = process.env.NEXT_PUBLIC_API_URL;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// FIX: MUI v7's Grid uses `size={{ xs, sm }}` instead of the old
-// `item xs={} sm={}` props — the old props are silently ignored (no
-// error, no warning), which is exactly why width looked broken despite
-// smWidth being computed correctly. Every Grid child below now uses
-// the `size` prop.
 const WIDTH_GRID_MAP = { full: 12, half: 6, third: 4, quarter: 3 };
 
 const HONEYPOT_FIELD_NAME = "_hpw";
@@ -76,7 +69,6 @@ export default function FormRenderer({ form }) {
   const [honeypot, setHoneypot] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [submittedEntry, setSubmittedEntry] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const layout = form.layout || { columns: 1, style: "card", primaryColor: "#18181b" };
@@ -230,7 +222,6 @@ export default function FormRenderer({ form }) {
         throw new Error(body?.message || "Something went wrong. Please try again.");
       }
 
-      setSubmittedEntry(body?.data || null);
       setSubmitted(true);
     } catch (err) {
       toast.error(err.message || "Something went wrong. Please try again.");
@@ -289,20 +280,10 @@ export default function FormRenderer({ form }) {
             </Typography>
             <Typography sx={{ color: "#71717a", maxWidth: 420, mx: "auto" }}>{form.successMessage}</Typography>
 
-            {submittedEntry?.editToken && (
-              <Box mt={3.5}>
-                <Typography sx={{ fontSize: 13, color: "#a1a1aa", mb: 1.5 }}>
-                  Need to make a change? You can edit your response using this link:
-                </Typography>
-                <Button
-                  component={Link}
-                  href={`/forms/edit/${submittedEntry.editToken}`}
-                  endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
-                  sx={{ textTransform: "none", fontWeight: 600, color: primaryColor, "&:hover": { bgcolor: "transparent", textDecoration: "underline" } }}
-                >
-                  Edit My Response
-                </Button>
-              </Box>
+            {submission.allowSubmitterEdit && (
+              <Typography sx={{ fontSize: 12.5, color: "#a1a1aa", mt: 3 }}>
+                Need to make a change later? Use the edit link provided by the school for this form.
+              </Typography>
             )}
           </Paper>
         </Container>
@@ -331,10 +312,7 @@ export default function FormRenderer({ form }) {
           )}
 
           {honeypotEnabled && (
-            <Box
-              sx={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }}
-              aria-hidden="true"
-            >
+            <Box sx={{ position: "absolute", left: "-9999px", width: 1, height: 1, overflow: "hidden" }} aria-hidden="true">
               <TextField
                 tabIndex={-1}
                 autoComplete="off"

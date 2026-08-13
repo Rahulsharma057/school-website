@@ -1,4 +1,5 @@
 const Navbar = require("../models/Navbar");
+const CustomPage = require("../models/CustomPage");
 
 const uploadToCloudinary = require("../utils/uploadToCloudinary");
 const deleteFromCloudinary = require("../utils/deleteFromCloudinary");
@@ -15,133 +16,63 @@ exports.createNavbar = async (req, res) => {
       navbar = new Navbar();
     }
 
-    // =========================================
-    // DESIGN SETTINGS
-    // =========================================
-
     const fields = [
-      // =========================
-      // BASIC INFO
-      // =========================
-
       "schoolName",
       "shortName",
-
       "primaryColor",
       "secondaryColor",
-
-      // =========================
-      // NAVBAR STYLE
-      // =========================
-
       "navbarBackground",
       "navbarTextColor",
       "navbarHoverColor",
       "navbarHeight",
       "navbarFontSize",
       "navbarFontWeight",
-
       "navbarShadow",
-
       "borderBottomColor",
-
       "activeMenuColor",
-
-      // =========================
-      // MENU STYLE
-      // =========================
-
       "menuFontSize",
       "menuFontWeight",
       "menuTextTransform",
-
-      // =========================
-      // SUBMENU STYLE
-      // =========================
-
       "submenuBackground",
       "submenuTextColor",
       "submenuHoverBackground",
       "submenuHoverTextColor",
       "submenuBorderRadius",
-
-      // =========================
-      // MEGA MENU STYLE
-      // =========================
-
       "megaMenuBackground",
       "megaMenuHeadingColor",
       "megaMenuTextColor",
-
-      // =========================
-      // TOP BAR
-      // =========================
-
       "topBarBackground",
       "topBarTextColor",
       "topBarFontSize",
-
       "topBarEmail",
       "topBarPhone",
       "topBarAddress",
-
-      // =========================
-      // LOGIN BUTTON
-      // =========================
-
       "loginButtonText",
       "loginButtonLink",
-
       "loginButtonBackground",
       "loginButtonTextColor",
       "loginButtonBorderColor",
-
       "loginButtonBorderRadius",
       "loginButtonFontSize",
       "loginButtonHoverColor",
-
-      // =========================
-      // ADMISSION BUTTON
-      // =========================
-
       "admissionButtonText",
       "admissionButtonLink",
-
       "admissionButtonBackground",
       "admissionButtonTextColor",
       "admissionButtonBorderColor",
-
       "admissionButtonBorderRadius",
       "admissionButtonFontSize",
       "admissionButtonHoverColor",
-
-      // =========================
-      // MOBILE MENU
-      // =========================
-
       "mobileMenuBackground",
       "mobileMenuBgColor",
-
       "mobileMenuTextColor",
       "mobileMenuActiveColor",
-
-      // =========================
-      // LOGO SIZE
-      // =========================
-
       "logoWidth",
       "logoHeight",
-
-      // =========================
-      // OTHER SETTINGS
-      // =========================
-
       "sticky",
       "transparent",
-
       "showShadow",
       "showTopBar",
-
       "showLoginButton",
       "showAdmissionButton",
     ];
@@ -156,44 +87,27 @@ exports.createNavbar = async (req, res) => {
       navbar.showShadow = req.body.showShadow;
     if (req.body.transparent !== undefined)
       navbar.transparent = req.body.transparent;
-
     if (req.body.showTopBar !== undefined)
       navbar.showTopBar = req.body.showTopBar;
-
     if (req.body.showLoginButton !== undefined)
       navbar.showLoginButton = req.body.showLoginButton;
-
     if (req.body.showAdmissionButton !== undefined)
       navbar.showAdmissionButton = req.body.showAdmissionButton;
-
-    // Logo Upload
 
     if (req.files?.logo?.length) {
       if (navbar.logo?.public_id) {
         await deleteFromCloudinary(navbar.logo.public_id);
       }
-
       const result = await uploadToCloudinary(req.files.logo[0]);
-
-      navbar.logo = {
-        url: result.secure_url,
-        public_id: result.public_id,
-      };
+      navbar.logo = { url: result.secure_url, public_id: result.public_id };
     }
-
-    // Favicon Upload
 
     if (req.files?.favicon?.length) {
       if (navbar.favicon?.public_id) {
         await deleteFromCloudinary(navbar.favicon.public_id);
       }
-
       const result = await uploadToCloudinary(req.files.favicon[0]);
-
-      navbar.favicon = {
-        url: result.secure_url,
-        public_id: result.public_id,
-      };
+      navbar.favicon = { url: result.secure_url, public_id: result.public_id };
     }
 
     await navbar.save();
@@ -204,10 +118,7 @@ exports.createNavbar = async (req, res) => {
       data: navbar,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -218,36 +129,86 @@ exports.createNavbar = async (req, res) => {
 exports.getNavbar = async (req, res) => {
   try {
     const navbar = await Navbar.findOne();
-
-    res.json({
-      success: true,
-      data: navbar,
-    });
+    res.json({ success: true, data: navbar });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // =========================================
 // PUBLIC NAVBAR
 // =========================================
+// FIX: now merges in every CustomPage flagged showInNavbar:true — admin
+// no longer has to manually re-add a dynamic page to the Menu Builder
+// for it to show up. Merge happens at READ time only (nothing extra is
+// stored on the Navbar document itself), so toggling a page's
+// showInNavbar flag takes effect immediately on next navbar fetch.
 
 exports.getPublicNavbar = async (req, res) => {
   try {
-    const navbar = await Navbar.findOne().select("-createdAt -updatedAt -__v");
+    const navbar = await Navbar.findOne()
+      .select("-createdAt -updatedAt -__v")
+      .lean();
 
-    res.json({
+    if (!navbar) {
+      return res.json({ success: true, data: navbar });
+    }
+
+    const dynamicPages = await CustomPage.find({
+      showInNavbar: true,
+      status: true,
+    })
+      .select("title route navbarOrder navbarParentId")
+      .sort({ navbarOrder: 1 })
+      .lean();
+
+    // clone menu items so we can safely push into their `children`
+    const menu = (navbar.menu || []).map((item) => ({
+      ...item,
+      children: [...(item.children || [])],
+    }));
+
+    const topLevelItems = [];
+
+    for (const page of dynamicPages) {
+      const dynamicItem = {
+        _id: `page-${page._id}`,
+        title: page.title,
+        url: page.route,
+        icon: "",
+        target: "_self",
+        order: page.navbarOrder ?? 0,
+        visible: true,
+        isMegaMenu: false,
+        children: [],
+        roles: [],
+      };
+
+      // NEW — if admin picked a parent menu item, nest as a submenu
+      // link instead of dropping it at the top level
+      const parent = page.navbarParentId
+        ? menu.find((m) => String(m._id) === String(page.navbarParentId))
+        : null;
+
+      if (parent) {
+        parent.children = [...parent.children, dynamicItem].sort(
+          (a, b) => (a.order || 0) - (b.order || 0),
+        );
+      } else {
+        topLevelItems.push(dynamicItem);
+      }
+    }
+
+    const mergedMenu = [...menu, ...topLevelItems].sort(
+      (a, b) => (a.order || 0) - (b.order || 0),
+    );
+
+    return res.json({
       success: true,
-      data: navbar,
+      data: { ...navbar, menu: mergedMenu },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -260,14 +221,12 @@ exports.addMenu = async (req, res) => {
     const navbar = await Navbar.findOne();
 
     if (!navbar) {
-      return res.status(404).json({
-        success: false,
-        message: "Navbar not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Navbar not found" });
     }
 
     navbar.menu.push(req.body);
-
     await navbar.save();
 
     res.json({
@@ -276,10 +235,7 @@ exports.addMenu = async (req, res) => {
       data: navbar.menu,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -292,19 +248,17 @@ exports.updateMenu = async (req, res) => {
     const navbar = await Navbar.findOne();
 
     if (!navbar) {
-      return res.status(404).json({
-        success: false,
-        message: "Navbar not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Navbar not found" });
     }
 
     const index = Number(req.params.index);
 
     if (index < 0 || index >= navbar.menu.length) {
-      return res.status(404).json({
-        success: false,
-        message: "Menu not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Menu not found" });
     }
 
     navbar.menu[index] = {
@@ -320,10 +274,7 @@ exports.updateMenu = async (req, res) => {
       data: navbar.menu[index],
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -336,25 +287,17 @@ exports.deleteMenu = async (req, res) => {
     const navbar = await Navbar.findOne();
 
     if (!navbar) {
-      return res.status(404).json({
-        success: false,
-        message: "Navbar not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Navbar not found" });
     }
 
     navbar.menu.splice(Number(req.params.index), 1);
-
     await navbar.save();
 
-    res.json({
-      success: true,
-      message: "Menu deleted successfully",
-    });
+    res.json({ success: true, message: "Menu deleted successfully" });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -367,14 +310,12 @@ exports.updateMenuOrder = async (req, res) => {
     const navbar = await Navbar.findOne();
 
     if (!navbar) {
-      return res.status(404).json({
-        success: false,
-        message: "Navbar not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Navbar not found" });
     }
 
     navbar.menu = req.body.menu;
-
     await navbar.save();
 
     res.json({
@@ -383,9 +324,6 @@ exports.updateMenuOrder = async (req, res) => {
       data: navbar.menu,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

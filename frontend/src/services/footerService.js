@@ -1,6 +1,7 @@
 import api from "./api";
 
 export const getFooter = () => api.get("/footer");
+export const getPublicFooter = () => api.get("/footer/public"); // NEW
 
 export const updateFooter = (data) => api.put("/footer", data);
 

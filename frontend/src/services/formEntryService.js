@@ -8,14 +8,20 @@ export const getEntries = (params) => api.get(BASE, { params });
 
 export const getEntry = (id) => api.get(`${BASE}/${id}`);
 
-// Table-route-based fetch — used by the dynamic /admin/tables/[tableSlug]
-// page. Returns { form, columns, data, total, ... } — columns come
-// straight from the form's own field config, so the table never has to
-// hardcode which fields exist.
 export const getEntriesByTableSlug = (tableSlug, params) =>
   api.get(`${BASE}/table/${tableSlug}`, { params });
 
-// ================= UPDATE =================
+// ================= EDIT PORTAL =================
+
+export const lookupEntryForEdit = (slug, identifier) =>
+  api.post(`${BASE}/portal/${slug}/lookup`, { identifier });
+
+export const updateEntryByEditToken = (token, formData) =>
+  api.put(`${BASE}/edit/${token}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+// ================= UPDATE (admin) =================
 
 export const updateEntry = (id, data) =>
   api.patch(`${BASE}/${id}`, {
@@ -48,13 +54,4 @@ export const exportEntriesCSV = (params) =>
   api.get(`${BASE}/export`, {
     params,
     responseType: "blob",
-  });
-
-  // ================= SELF-SERVICE EDIT (public, by token) =================
-
-export const getEntryByEditToken = (token) => api.get(`${BASE}/edit/${token}`);
-
-export const updateEntryByEditToken = (token, formData) =>
-  api.put(`${BASE}/edit/${token}`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
   });

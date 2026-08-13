@@ -20,33 +20,40 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
 
-  role:{
-type:String,
+    // NEW: used for fee-due SMS reminders (parent/guardian) and general contact.
+    // Optional so existing users without a phone don't break validation.
+    phone: {
+      type: String,
+      trim: true,
+      default: null,
+    },
 
-enum:[
+    role: {
+      type: String,
 
-"SUPER_ADMIN",
-"ADMIN",
-"PRINCIPAL",
-"TEACHER",
-"ACCOUNTANT",
-"STUDENT",
-"PARENT"
+      enum: [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "PRINCIPAL",
+        "TEACHER",
+        "ACCOUNTANT",
+        "STUDENT",
+        "PARENT",
+      ],
 
-],
-
-default:"STUDENT"
-},
+      default: "STUDENT",
+    },
 
     isActive: {
       type: Boolean,
       default: true,
     },
-createdBy:{
- type:mongoose.Schema.Types.ObjectId,
- ref:"User",
- default:null
-}
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+lastLogin: { type: Date, default: null },
   },
 
   {
@@ -55,3 +62,6 @@ createdBy:{
 );
 
 module.exports = mongoose.model("User", userSchema);
+
+
+

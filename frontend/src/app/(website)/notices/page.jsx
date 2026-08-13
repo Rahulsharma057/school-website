@@ -106,7 +106,7 @@ export default function NoticesPage() {
               const style = TYPE_STYLES[item.type] || TYPE_STYLES.general;
               return (
                 <Box
-                  key={item._id}
+                  key={item?._id}
                   component={Link}
                   href={
                     item.link?.type === "external"

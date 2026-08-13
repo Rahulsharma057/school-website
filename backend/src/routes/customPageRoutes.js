@@ -9,6 +9,7 @@ const {
   getPages,
   getPublicPage,
   getSitemapData,
+  getMediaLibrary,
   updatePage,
   duplicatePage,
   bulkAction,
@@ -54,6 +55,14 @@ router.patch(
   authMiddleware,
   allowRoles("SUPER_ADMIN", "ADMIN"),
   bulkAction,
+);
+
+// FIX: NEW — Media library (list previously-uploaded images for reuse).
+router.get(
+  "/media-library",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "EDITOR"),
+  getMediaLibrary,
 );
 
 // Get Single Page
