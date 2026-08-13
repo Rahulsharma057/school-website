@@ -7,6 +7,19 @@ const { hashPassword, comparePassword } = require("../services/authService");
 
 const generateToken = require("../utils/generateToken");
 
+
+const getCookieOptions = () => {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/",
+  };
+};
+
 exports.registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -141,16 +154,8 @@ exports.loginUser = asyncHandler(async (req, res) => {
 
   await user.save();
 
-res.cookie("token", token, {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite:
-    process.env.NODE_ENV === "production"
-      ? "none"
-      : "lax",
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: "/",
-});
+res.cookie("token", token, getCookieOptions());
+
   res.json(
     new ApiResponse(
       200,
@@ -173,7 +178,7 @@ res.cookie("token", token, {
 // LOGOUT
 
 exports.logoutUser = asyncHandler(async (req, res) => {
-  res.clearCookie("token");
+res.clearCookie("token", getCookieOptions());
 
   res.json({
     success: true,
