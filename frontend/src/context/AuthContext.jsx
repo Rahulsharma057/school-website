@@ -21,7 +21,7 @@ const getRedirectPath = (role) => {
     return "/admin/dashboard";
   }
   // STUDENT, TEACHER, PARENT
-  return "/portal/profile";
+  return "/";
 };
 
 export const AuthProvider = ({ children }) => {
