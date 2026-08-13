@@ -10,7 +10,7 @@ import SearchOffIcon from "@mui/icons-material/SearchOff";
 import { toast } from "react-toastify";
 
 import { lookupEntryForEdit } from "@/services/formEntryService";
-import FormEditRenderer from "./FormEditRenderer";
+import FormEditRenderer from "@/components/website/forms/FormEditRenderer";
 
 /**
  * The ONE stable, admin-shareable link per form — /forms/portal/[slug].
