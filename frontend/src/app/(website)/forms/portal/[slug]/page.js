@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import EditPortal from "@/components/website/forms/EditPortal";
+import EditPortal from "../../EditPortal";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
