@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+
 import {
   Drawer,
   List,
@@ -9,7 +10,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Toolbar,
   Box,
   Typography,
   Divider,
@@ -40,14 +40,22 @@ import PaymentsIcon from "@mui/icons-material/Payments";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
-import PaymentIcon from "@mui/icons-material/Payment";
 import DashboardIcon from "@mui/icons-material/Dashboard";
+
 import { useAuth } from "@/context/AuthContext";
 
 const DRAWER_WIDTH = 260;
 
-// Common role groups (reuse ke liye)
-const STAFF_ALL = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
+const MOBILE_HEADER_HEIGHT = 60;
+const TABLET_HEADER_HEIGHT = 64;
+const DESKTOP_HEADER_HEIGHT = 70;
+
+const STAFF_ALL = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "PRINCIPAL",
+];
+
 const STAFF_WITH_ACCOUNTANT = [
   "SUPER_ADMIN",
   "ADMIN",
@@ -55,10 +63,10 @@ const STAFF_WITH_ACCOUNTANT = [
   "ACCOUNTANT",
 ];
 
-// =========================================================
-// Website / Content Management
-// roles na di ho to sab staff dekh sakte hain (default)
-// =========================================================
+/* =====================================================
+   WEBSITE CONTENT
+===================================================== */
+
 const contentMenu = [
   {
     title: "Home-slider",
@@ -75,55 +83,55 @@ const contentMenu = [
   {
     title: "Users",
     path: "/admin/users",
-    icon: <NewspaperIcon />,
+    icon: <PeopleIcon />,
     roles: ["SUPER_ADMIN"],
   },
   {
     title: "Navbar",
     path: "/admin/navbar",
-    icon: <EventIcon />,
+    icon: <DashboardIcon />,
     roles: STAFF_ALL,
   },
   {
     title: "Forms",
     path: "/admin/forms",
-    icon: <PeopleIcon />,
+    icon: <AssignmentIcon />,
     roles: STAFF_ALL,
   },
   {
     title: "Syllabus",
     path: "/admin/syllabus",
-    icon: <SettingsIcon />,
+    icon: <SchoolIcon />,
     roles: STAFF_ALL,
   },
   {
     title: "Quotes",
     path: "/admin/quotes",
-    icon: <PeopleIcon />,
+    icon: <GradeIcon />,
     roles: STAFF_ALL,
   },
   {
     title: "News",
     path: "/admin/news",
-    icon: <SettingsIcon />,
+    icon: <NewspaperIcon />,
     roles: STAFF_ALL,
   },
   {
     title: "Contact-pages",
     path: "/admin/contact-pages",
-    icon: <SettingsIcon />,
+    icon: <PeopleIcon />,
     roles: STAFF_ALL,
   },
   {
     title: "Announcements",
     path: "/admin/announcements",
-    icon: <SettingsIcon />,
+    icon: <EventIcon />,
     roles: STAFF_ALL,
   },
   {
     title: "All Form Entries",
     path: "/admin/entries",
-    icon: <SettingsIcon />,
+    icon: <FactCheckIcon />,
     roles: STAFF_ALL,
   },
   {
@@ -135,16 +143,15 @@ const contentMenu = [
   {
     title: "Gallery",
     path: "/admin/gallery",
-    icon: <SettingsIcon />,
+    icon: <CollectionsIcon />,
     roles: STAFF_ALL,
   },
 ];
 
-// =========================================================
-// School Management
-// Accountant ko sirf Salary/Attendance-type cheezein — academic
-// modules (Classes/Students/Promotions/Exams) nahi
-// =========================================================
+/* =====================================================
+   SCHOOL MANAGEMENT
+===================================================== */
+
 const schoolMenu = [
   {
     title: "Classes",
@@ -155,13 +162,13 @@ const schoolMenu = [
   {
     title: "Students",
     path: "/admin/students",
-    icon: <SchoolIcon />,
+    icon: <PersonIcon />,
     roles: STAFF_ALL,
   },
   {
     title: "Teachers",
     path: "/admin/teachers",
-    icon: <PersonIcon />,
+    icon: <PeopleIcon />,
     roles: STAFF_ALL,
   },
   {
@@ -223,37 +230,35 @@ const schoolMenu = [
     path: "/admin/period-slots",
     icon: <ScheduleOutlinedIcon />,
     roles: STAFF_ALL,
-    visible: true,
   },
   {
     title: "Timetable",
     path: "/admin/timetable",
     icon: <CalendarMonthOutlinedIcon />,
     roles: STAFF_ALL,
-    visible: true,
   },
   {
     title: "Fee Dashboard",
     path: "/admin/fees/dashboard",
-    icon: <DashboardIcon />,
+    icon: <AccountBalanceWalletIcon />,
     roles: STAFF_WITH_ACCOUNTANT,
   },
   {
     title: "Fees",
     path: "/admin/fees",
-    icon: <AccountBalanceWalletIcon />,
+    icon: <ReceiptLongIcon />,
     roles: STAFF_WITH_ACCOUNTANT,
   },
   {
     title: "Fee Structures",
     path: "/admin/fees/structures",
-    icon: <ReceiptLongIcon />,
+    icon: <AssignmentIcon />,
     roles: STAFF_WITH_ACCOUNTANT,
   },
   {
     title: "Assign Fees",
     path: "/admin/fees/assign",
-    icon: <AssignmentIcon />,
+    icon: <PaymentsIcon />,
     roles: STAFF_WITH_ACCOUNTANT,
   },
   {
@@ -268,55 +273,106 @@ const schoolMenu = [
     icon: <WarningAmberIcon />,
     roles: STAFF_WITH_ACCOUNTANT,
   },
-/*   {
-    title: "Collect Fee",
-    path: "/admin/fees/collect",
-    roles: STAFF_WITH_ACCOUNTANT,
-    icon: <PaymentIcon />,
-  }, */
 ];
 
-// role ke hisaab se filter karne wala helper
+/* =====================================================
+   ROLE FILTER
+===================================================== */
+
 const filterByRole = (items, role) => {
-  return items.filter((item) => !item.roles || item.roles.includes(role));
+  if (!role) return [];
+
+  return items.filter(
+    (item) => !item.roles || item.roles.includes(role)
+  );
 };
 
-function MenuSection({ items, pathname, handleDrawerToggle }) {
-  if (items.length === 0) return null; // agar section mein kuch nahi bacha to section hi mat dikhao
+/* =====================================================
+   MENU SECTION
+===================================================== */
+
+function MenuSection({
+  items,
+  pathname,
+  handleDrawerToggle,
+  isMobile,
+}) {
+  if (!items.length) return null;
 
   return (
-    <List>
+    <List disablePadding>
       {items.map((item) => {
         const isActive =
           pathname === item.path ||
           (item.path === "/admin/fees"
             ? pathname.startsWith("/admin/fees")
             : pathname.startsWith(`${item.path}/`));
+
         return (
-          <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
+          <ListItem
+            key={item.path}
+            disablePadding
+            sx={{
+              mb: 0.5,
+            }}
+          >
             <ListItemButton
               component={Link}
               href={item.path}
-              onClick={handleDrawerToggle}
+              onClick={
+                isMobile
+                  ? handleDrawerToggle
+                  : undefined
+              }
+              selected={isActive}
               sx={{
-                borderRadius: "12px",
-                transition: "all 0.2s ease",
-                backgroundColor: isActive ? "#eff6ff" : "transparent",
-                color: isActive ? "#2563eb" : "#64748b",
+                minHeight: 44,
+                borderRadius: "10px",
+                px: 1.5,
+
+                color: isActive
+                  ? "#2563eb"
+                  : "#64748b",
+
+                backgroundColor: isActive
+                  ? "#eff6ff"
+                  : "transparent",
+
                 "&:hover": {
-                  backgroundColor: isActive ? "#eff6ff" : "#f1f5f9",
-                  color: isActive ? "#2563eb" : "#1e293b",
+                  backgroundColor: isActive
+                    ? "#eff6ff"
+                    : "#f1f5f9",
+
+                  color: isActive
+                    ? "#2563eb"
+                    : "#1e293b",
+                },
+
+                "&.Mui-selected": {
+                  backgroundColor: "#eff6ff",
+                  color: "#2563eb",
+                },
+
+                "&.Mui-selected:hover": {
+                  backgroundColor: "#eff6ff",
                 },
               }}
             >
-              <ListItemIcon sx={{ minWidth: 40, color: "inherit" }}>
+              <ListItemIcon
+                sx={{
+                  minWidth: 40,
+                  color: "inherit",
+                }}
+              >
                 {item.icon}
               </ListItemIcon>
+
               <ListItemText
                 primary={item.title}
                 primaryTypographyProps={{
                   fontSize: "0.9rem",
                   fontWeight: isActive ? 600 : 500,
+                  noWrap: true,
                 }}
               />
             </ListItemButton>
@@ -327,112 +383,389 @@ function MenuSection({ items, pathname, handleDrawerToggle }) {
   );
 }
 
-export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
+/* =====================================================
+   SIDEBAR
+===================================================== */
+
+export default function Sidebar({
+  mobileOpen,
+  handleDrawerToggle,
+}) {
   const pathname = usePathname();
   const { user } = useAuth();
 
-  // user load hone se pehle kuch mat dikhao (flash of full menu se bachne ke liye)
   const role = user?.role;
 
-  const visibleSchoolMenu = filterByRole(schoolMenu, role);
-  const visibleContentMenu = filterByRole(contentMenu, role);
+  const visibleSchoolMenu = filterByRole(
+    schoolMenu,
+    role
+  );
+
+  const visibleContentMenu = filterByRole(
+    contentMenu,
+    role
+  );
+
+  /* =====================================================
+     DRAWER CONTENT
+  ===================================================== */
 
   const drawerContent = (
-    <Box>
-      <Toolbar sx={{ display: "flex", alignItems: "center", px: 3 }}>
+    <Box
+      sx={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        bgcolor: "#fff",
+      }}
+    >
+      {/* LOGO */}
+
+      <Box
+        sx={{
+          height: {
+            xs: MOBILE_HEADER_HEIGHT,
+            sm: TABLET_HEADER_HEIGHT,
+            md: DESKTOP_HEADER_HEIGHT,
+          },
+
+          minHeight: {
+            xs: MOBILE_HEADER_HEIGHT,
+            sm: TABLET_HEADER_HEIGHT,
+            md: DESKTOP_HEADER_HEIGHT,
+          },
+
+          display: "flex",
+          alignItems: "center",
+          px: 2.5,
+          flexShrink: 0,
+        }}
+      >
         <Typography
           variant="h6"
-          sx={{ fontWeight: 800, color: "#1e293b", letterSpacing: -0.5 }}
+          sx={{
+            fontWeight: 800,
+            color: "#1e293b",
+            letterSpacing: -0.5,
+          }}
         >
-          ADMIN<span style={{ color: "#3b82f6" }}>CORE</span>
+          ADMIN
+          <Box
+            component="span"
+            sx={{
+              color: "#3b82f6",
+            }}
+          >
+            CORE
+          </Box>
         </Typography>
-      </Toolbar>
-      <Divider sx={{ opacity: 0.6 }} />
+      </Box>
 
-      {visibleSchoolMenu.length > 0 && (
-        <Box sx={{ p: 2 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              pl: 1,
-              color: "#94a3b8",
-              fontWeight: 700,
-              letterSpacing: 0.5,
-            }}
-          >
-            SCHOOL MANAGEMENT
-          </Typography>
-          <MenuSection
-            items={visibleSchoolMenu}
-            pathname={pathname}
-            handleDrawerToggle={handleDrawerToggle}
-          />
-        </Box>
-      )}
+      <Divider />
 
-      {visibleSchoolMenu.length > 0 && visibleContentMenu.length > 0 && (
-        <Divider sx={{ opacity: 0.6, mx: 2 }} />
-      )}
+      {/* ONLY THIS AREA SCROLLS */}
 
-      {visibleContentMenu.length > 0 && (
-        <Box sx={{ p: 2 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              pl: 1,
-              color: "#94a3b8",
-              fontWeight: 700,
-              letterSpacing: 0.5,
-            }}
-          >
-            WEBSITE CONTENT
-          </Typography>
-          <MenuSection
-            items={visibleContentMenu}
-            pathname={pathname}
-            handleDrawerToggle={handleDrawerToggle}
-          />
-        </Box>
-      )}
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+
+          overflowY: "auto",
+          overflowX: "hidden",
+
+          overscrollBehavior: "contain",
+
+          WebkitOverflowScrolling: "touch",
+
+          scrollbarWidth: "thin",
+          scrollbarColor: "#cbd5e1 transparent",
+
+          "&::-webkit-scrollbar": {
+            width: "6px",
+          },
+
+          "&::-webkit-scrollbar-thumb": {
+            backgroundColor: "#cbd5e1",
+            borderRadius: "10px",
+          },
+
+          "&::-webkit-scrollbar-track": {
+            backgroundColor: "transparent",
+          },
+        }}
+      >
+        {/* SCHOOL MANAGEMENT */}
+
+        {visibleSchoolMenu.length > 0 && (
+          <Box sx={{ p: 2 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                pl: 1,
+                color: "#94a3b8",
+                fontWeight: 700,
+                letterSpacing: 0.5,
+              }}
+            >
+              SCHOOL MANAGEMENT
+            </Typography>
+
+            <MenuSection
+              items={visibleSchoolMenu}
+              pathname={pathname}
+              handleDrawerToggle={handleDrawerToggle}
+              isMobile={true}
+            />
+          </Box>
+        )}
+
+        {visibleSchoolMenu.length > 0 &&
+          visibleContentMenu.length > 0 && (
+            <Divider sx={{ mx: 2 }} />
+          )}
+
+        {/* WEBSITE CONTENT */}
+
+        {visibleContentMenu.length > 0 && (
+          <Box sx={{ p: 2 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                pl: 1,
+                color: "#94a3b8",
+                fontWeight: 700,
+                letterSpacing: 0.5,
+              }}
+            >
+              WEBSITE CONTENT
+            </Typography>
+
+            <MenuSection
+              items={visibleContentMenu}
+              pathname={pathname}
+              handleDrawerToggle={handleDrawerToggle}
+              isMobile={true}
+            />
+          </Box>
+        )}
+
+        <Box sx={{ height: 30 }} />
+      </Box>
     </Box>
   );
 
   return (
-    <Box
-      component="nav"
-      sx={{ width: { lg: DRAWER_WIDTH }, flexShrink: { lg: 0 } }}
-    >
+    <>
+      {/* =================================================
+          MOBILE / TABLET
+      ================================================= */}
+
       <Drawer
         variant="temporary"
-        open={mobileOpen}
+        anchor="left"
+        open={Boolean(mobileOpen)}
         onClose={handleDrawerToggle}
-        ModalProps={{ keepMounted: true }}
+        ModalProps={{
+          keepMounted: true,
+        }}
         sx={{
-          display: { xs: "block", lg: "none" },
+          display: {
+            xs: "block",
+            md: "none",
+          },
+
           "& .MuiDrawer-paper": {
-            boxSizing: "border-box",
             width: DRAWER_WIDTH,
+
+            top: {
+              xs: MOBILE_HEADER_HEIGHT,
+              sm: TABLET_HEADER_HEIGHT,
+            },
+
+            height: {
+              xs: `calc(100dvh - ${MOBILE_HEADER_HEIGHT}px)`,
+              sm: `calc(100dvh - ${TABLET_HEADER_HEIGHT}px)`,
+            },
+
+            boxSizing: "border-box",
+
             borderRight: "1px solid #e2e8f0",
+
+            overflow: "hidden",
           },
         }}
       >
         {drawerContent}
       </Drawer>
 
+      {/* =================================================
+          DESKTOP
+      ================================================= */}
+
       <Drawer
         variant="permanent"
         sx={{
-          display: { xs: "none", lg: "block" },
+          display: {
+            xs: "none",
+            md: "block",
+          },
+
+          width: DRAWER_WIDTH,
+
+          flexShrink: 0,
+
           "& .MuiDrawer-paper": {
-            boxSizing: "border-box",
             width: DRAWER_WIDTH,
+
+            top: DESKTOP_HEADER_HEIGHT,
+
+            height: `calc(100dvh - ${DESKTOP_HEADER_HEIGHT}px)`,
+
+            boxSizing: "border-box",
+
             borderRight: "1px solid #e2e8f0",
+
+            overflow: "hidden",
+
+            display: "flex",
+            flexDirection: "column",
           },
         }}
-        open
       >
-        {drawerContent}
+        {/* IMPORTANT:
+            Desktop par isMobile FALSE hona chahiye
+        */}
+
+        <Box
+          sx={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            bgcolor: "#fff",
+          }}
+        >
+          {/* LOGO */}
+
+          <Box
+            sx={{
+              height: DESKTOP_HEADER_HEIGHT,
+              minHeight: DESKTOP_HEADER_HEIGHT,
+              display: "flex",
+              alignItems: "center",
+              px: 2.5,
+              flexShrink: 0,
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 800,
+                color: "#1e293b",
+                letterSpacing: -0.5,
+              }}
+            >
+              ADMIN
+              <Box
+                component="span"
+                sx={{
+                  color: "#3b82f6",
+                }}
+              >
+                CORE
+              </Box>
+            </Typography>
+          </Box>
+
+          <Divider />
+
+          {/* DESKTOP SCROLL AREA */}
+
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+
+              overflowY: "auto",
+              overflowX: "hidden",
+
+              overscrollBehavior: "contain",
+
+              scrollbarWidth: "thin",
+              scrollbarColor: "#cbd5e1 transparent",
+
+              "&::-webkit-scrollbar": {
+                width: "6px",
+              },
+
+              "&::-webkit-scrollbar-thumb": {
+                backgroundColor: "#cbd5e1",
+                borderRadius: "10px",
+              },
+
+              "&::-webkit-scrollbar-track": {
+                backgroundColor: "transparent",
+              },
+            }}
+          >
+            {visibleSchoolMenu.length > 0 && (
+              <Box sx={{ p: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    pl: 1,
+                    color: "#94a3b8",
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  SCHOOL MANAGEMENT
+                </Typography>
+
+                <MenuSection
+                  items={visibleSchoolMenu}
+                  pathname={pathname}
+                  handleDrawerToggle={handleDrawerToggle}
+                  isMobile={false}
+                />
+              </Box>
+            )}
+
+            {visibleSchoolMenu.length > 0 &&
+              visibleContentMenu.length > 0 && (
+                <Divider sx={{ mx: 2 }} />
+              )}
+
+            {visibleContentMenu.length > 0 && (
+              <Box sx={{ p: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    pl: 1,
+                    color: "#94a3b8",
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  WEBSITE CONTENT
+                </Typography>
+
+                <MenuSection
+                  items={visibleContentMenu}
+                  pathname={pathname}
+                  handleDrawerToggle={handleDrawerToggle}
+                  isMobile={false}
+                />
+              </Box>
+            )}
+
+            <Box sx={{ height: 30 }} />
+          </Box>
+        </Box>
       </Drawer>
-    </Box>
+    </>
   );
 }

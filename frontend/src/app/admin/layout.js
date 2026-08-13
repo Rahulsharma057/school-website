@@ -8,10 +8,12 @@ import Header from "@/components/admin/Header";
 import { Box } from "@mui/material";
 
 const DRAWER_WIDTH = 260;
-const HEADER_HEIGHT = 64;
 
-export default function AdminLayout({ children }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+export default function AdminLayout({
+  children,
+}) {
+  const [mobileOpen, setMobileOpen] =
+    useState(false);
 
   const handleDrawerToggle = () => {
     setMobileOpen((prev) => !prev);
@@ -20,44 +22,71 @@ export default function AdminLayout({ children }) {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
         width: "100%",
-        overflowX: "hidden",
+
+        minHeight: "100vh",
+
         bgcolor: "#f8fafc",
+
+        overflowX: "hidden",
       }}
     >
-      {/* Header */}
-      <Header handleDrawerToggle={handleDrawerToggle} />
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
-      {/* Sidebar */}
-      <Sidebar
-        mobileOpen={mobileOpen}
-        handleDrawerToggle={handleDrawerToggle}
+      <Header
+        handleDrawerToggle={
+          handleDrawerToggle
+        }
       />
 
-      {/* Main Content */}
+      {/* =================================================
+          SIDEBAR
+      ================================================= */}
+
+      <Sidebar
+        mobileOpen={mobileOpen}
+        handleDrawerToggle={
+          handleDrawerToggle
+        }
+      />
+
+      {/* =================================================
+          MAIN CONTENT
+      ================================================= */}
+
       <Box
         component="main"
         sx={{
-          minHeight: "100vh",
           boxSizing: "border-box",
 
-          // Mobile
           width: "100%",
-          ml: 0,
-          pt: `${HEADER_HEIGHT + 16}px`,
+
+          minHeight: "100vh",
+
+          pt: {
+            xs: "84px",
+            sm: "88px",
+            md: "94px",
+          },
+
           px: {
             xs: 1.5,
             sm: 2,
             md: 3,
           },
 
-          // Desktop
-          "@media (min-width: 1200px)": {
+          overflowX: "hidden",
+
+          /* ================================
+             DESKTOP
+          ================================= */
+
+          "@media (min-width: 900px)": {
             ml: `${DRAWER_WIDTH}px`,
+
             width: `calc(100% - ${DRAWER_WIDTH}px)`,
-            pt: `${HEADER_HEIGHT + 24}px`,
-            px: 3,
           },
         }}
       >

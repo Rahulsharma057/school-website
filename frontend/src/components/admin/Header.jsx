@@ -19,7 +19,9 @@ import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 
 import { useAuth } from "@/context/AuthContext";
 
-export default function Header({ handleDrawerToggle }) {
+export default function Header({
+  handleDrawerToggle,
+}) {
   const auth = useAuth();
 
   if (!auth) return null;
@@ -27,25 +29,30 @@ export default function Header({ handleDrawerToggle }) {
   const { user, logout } = auth;
 
   const userName = user?.name || "Admin User";
-  const userInitial = userName.charAt(0).toUpperCase();
+  const userInitial =
+    userName.charAt(0).toUpperCase();
 
   return (
     <AppBar
       position="fixed"
       sx={{
-        zIndex: (theme) => theme.zIndex.drawer + 1,
+        zIndex: (theme) =>
+          theme.zIndex.drawer + 1,
 
         bgcolor: alpha("#ffffff", 0.95),
         backdropFilter: "blur(10px)",
+
         color: "#1e293b",
 
         boxShadow: "none",
-        borderBottom: "1px solid #e2e8f0",
+
+        borderBottom:
+          "1px solid #e2e8f0",
 
         height: {
           xs: 60,
           sm: 64,
-          lg: 70,
+          md: 70,
         },
       }}
     >
@@ -54,7 +61,7 @@ export default function Header({ handleDrawerToggle }) {
           minHeight: {
             xs: "60px !important",
             sm: "64px !important",
-            lg: "70px !important",
+            md: "70px !important",
           },
 
           px: {
@@ -65,24 +72,30 @@ export default function Header({ handleDrawerToggle }) {
 
           display: "flex",
           justifyContent: "space-between",
+
           gap: 1,
 
           width: "100%",
+
           boxSizing: "border-box",
         }}
       >
         {/* =========================
             LEFT SIDE
         ========================= */}
+
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
+
             minWidth: 0,
+
             flex: 1,
           }}
         >
           {/* MOBILE / TABLET MENU */}
+
           <IconButton
             color="inherit"
             aria-label="open navigation menu"
@@ -90,7 +103,7 @@ export default function Header({ handleDrawerToggle }) {
             sx={{
               display: {
                 xs: "flex",
-                lg: "none",
+                md: "none",
               },
 
               mr: {
@@ -112,6 +125,7 @@ export default function Header({ handleDrawerToggle }) {
           </IconButton>
 
           {/* TITLE */}
+
           <Typography
             variant="h6"
             noWrap
@@ -127,12 +141,8 @@ export default function Header({ handleDrawerToggle }) {
               letterSpacing: "-0.5px",
 
               overflow: "hidden",
-              textOverflow: "ellipsis",
 
-              display: {
-                xs: "block",
-                sm: "block",
-              },
+              textOverflow: "ellipsis",
             }}
           >
             School{" "}
@@ -150,6 +160,7 @@ export default function Header({ handleDrawerToggle }) {
         {/* =========================
             RIGHT SIDE
         ========================= */}
+
         <Box
           sx={{
             display: "flex",
@@ -165,6 +176,7 @@ export default function Header({ handleDrawerToggle }) {
           }}
         >
           {/* NOTIFICATION */}
+
           <Tooltip title="Notifications">
             <IconButton
               sx={{
@@ -185,11 +197,14 @@ export default function Header({ handleDrawerToggle }) {
                 },
               }}
             >
-              <NotificationsNoneIcon fontSize="small" />
+              <NotificationsNoneIcon
+                fontSize="small"
+              />
             </IconButton>
           </Tooltip>
 
           {/* DIVIDER */}
+
           <Divider
             orientation="vertical"
             flexItem
@@ -203,9 +218,8 @@ export default function Header({ handleDrawerToggle }) {
             }}
           />
 
-          {/* =========================
-              USER
-          ========================= */}
+          {/* USER */}
+
           <Box
             sx={{
               display: "flex",
@@ -219,6 +233,7 @@ export default function Header({ handleDrawerToggle }) {
             }}
           >
             {/* USER NAME */}
+
             <Box
               sx={{
                 textAlign: "right",
@@ -233,7 +248,9 @@ export default function Header({ handleDrawerToggle }) {
                 sx={{
                   fontSize: "0.875rem",
                   fontWeight: 600,
+
                   color: "#1e293b",
+
                   lineHeight: 1.3,
                 }}
               >
@@ -243,7 +260,9 @@ export default function Header({ handleDrawerToggle }) {
               <Typography
                 sx={{
                   fontSize: "0.75rem",
+
                   color: "#64748b",
+
                   lineHeight: 1.3,
                 }}
               >
@@ -252,6 +271,7 @@ export default function Header({ handleDrawerToggle }) {
             </Box>
 
             {/* AVATAR */}
+
             <Tooltip title={userName}>
               <Avatar
                 sx={{
@@ -276,7 +296,8 @@ export default function Header({ handleDrawerToggle }) {
 
                   fontWeight: 600,
 
-                  border: "2px solid #eff6ff",
+                  border:
+                    "2px solid #eff6ff",
                 }}
               >
                 {userInitial}
@@ -285,6 +306,7 @@ export default function Header({ handleDrawerToggle }) {
           </Box>
 
           {/* DIVIDER */}
+
           <Divider
             orientation="vertical"
             flexItem
@@ -298,9 +320,8 @@ export default function Header({ handleDrawerToggle }) {
             }}
           />
 
-          {/* =========================
-              LOGOUT
-          ========================= */}
+          {/* LOGOUT */}
+
           <Button
             variant="contained"
             size="small"
@@ -309,7 +330,8 @@ export default function Header({ handleDrawerToggle }) {
             startIcon={
               <LogoutIcon
                 sx={{
-                  fontSize: "18px !important",
+                  fontSize:
+                    "18px !important",
                 }}
               />
             }
@@ -322,7 +344,8 @@ export default function Header({ handleDrawerToggle }) {
 
               boxShadow: "none",
 
-              border: "1px solid #fee2e2",
+              border:
+                "1px solid #fee2e2",
 
               textTransform: "none",
 
@@ -355,7 +378,8 @@ export default function Header({ handleDrawerToggle }) {
               "&:hover": {
                 bgcolor: "#fef2f2",
 
-                border: "1px solid #fecaca",
+                border:
+                  "1px solid #fecaca",
 
                 boxShadow: "none",
               },
