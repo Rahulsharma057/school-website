@@ -12,7 +12,7 @@ const {
   getClassFeeSummary,
   getDueList,
   getStudentFeeByStudentId,
-  getFeeDashboard,
+  getFeeDashboard, getMyClassFeeSummary,
 } = require("../controllers/studentFeeController");
 
 const authMiddleware = require("../middlewares/authMiddleware");
@@ -28,6 +28,12 @@ router.get(
   authMiddleware,
   allowRoles("SUPER_ADMIN", "ADMIN", "ACCOUNTANT"),
   getClassFeeSummary,
+);
+router.get(
+  "/my-class-summary",
+  authMiddleware,
+  allowRoles("TEACHER"),
+  getMyClassFeeSummary,
 );
 router.get(
   "/due-list",

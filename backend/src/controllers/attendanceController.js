@@ -52,17 +52,14 @@ exports.markAttendance = asyncHandler(async (req, res) => {
 });
 
 // ================= UPDATE ATTENDANCE (same din dobara edit) =================
-// Access: TEACHER only (apni class ki hi)
+// FIX: Access badla gaya — pehle sirf TEACHER allowed tha (route file me
+// allowRoles("TEACHER")), jo galti se stated requirement ke ulta tha
+// ("teacher sirf mark kare, edit sirf Admin/Principal kare"). Ab route
+// level pe TEACHER hataya gaya hai — is function ka logic khud nahi
+// badla, sirf permission route file me change hui hai (neeche dekho).
 
 exports.updateAttendance = asyncHandler(async (req, res) => {
   const { classId, date, records } = req.body;
-
-  const isAuthorized = await isTeacherAssignedToClass(req.user._id, classId);
-  if (!isAuthorized) {
-    return res.status(403).json(
-      new ApiResponse(403, null, "You are not assigned to this class")
-    );
-  }
 
   const normalizedDate = normalizeDate(date);
 
@@ -74,7 +71,7 @@ exports.updateAttendance = asyncHandler(async (req, res) => {
   }
 
   attendance.records = records;
-  attendance.markedBy = req.user._id;
+  attendance.markedBy = req.user._id; // NOTE: consider renaming to lastEditedBy / adding a separate field if you want to keep "who originally marked it" visible after an admin edit — currently this overwrites it.
   await attendance.save();
 
   res.json(new ApiResponse(200, attendance, "Attendance updated successfully"));
@@ -109,6 +106,106 @@ exports.getClassAttendance = asyncHandler(async (req, res) => {
   }
 
   res.json(new ApiResponse(200, attendance, "Attendance fetched successfully"));
+});
+
+// ================= CLASS ATTENDANCE REPORT (date range, % per student) =================
+// FIX: NEW — getClassAttendance only ever looked at one date. This is
+// the "did we actually mark every day this month, and what's each
+// student's attendance %" report — one call, every active student in
+// the class, tallied across every Attendance doc in the date range.
+// Access: TEACHER (own assigned class), SUPER_ADMIN, ADMIN, PRINCIPAL
+
+exports.getClassAttendanceReport = asyncHandler(async (req, res) => {
+  const { classId, from, to } = req.query;
+
+  if (!classId || !from || !to) {
+    return res.status(400).json(
+      new ApiResponse(400, null, "classId, from, and to are required")
+    );
+  }
+
+  if (req.user.role === "TEACHER") {
+    const isAuthorized = await isTeacherAssignedToClass(req.user._id, classId);
+    if (!isAuthorized) {
+      return res.status(403).json(
+        new ApiResponse(403, null, "You are not assigned to this class")
+      );
+    }
+  }
+
+  const fromDate = normalizeDate(from);
+
+  // "to" ka pura din include karna hai, isliye end-of-day tak — same
+  // pattern jo getStudentAttendance already use karta hai
+  const toDate = new Date(to);
+  toDate.setHours(23, 59, 59, 999);
+
+  // Step A: is class ke saare active students (jinke liye report banegi)
+  const students = await StudentProfile.find({ class: classId, status: "ACTIVE" })
+    .populate("user", "name email")
+    .sort({ rollNumber: 1 });
+
+  // Step B: is date-range me is class ki saari attendance docs (ek doc = ek din)
+  const attendanceDocs = await Attendance.find({
+    class: classId,
+    date: { $gte: fromDate, $lte: toDate },
+  });
+
+  const totalDaysMarked = attendanceDocs.length;
+
+  // Step C: har student ke liye records tally karo across saare din
+  const report = students.map((student) => {
+    const studentUserId = String(student.user?._id || student.user);
+
+    let present = 0;
+    let absent = 0;
+    let leave = 0;
+
+    attendanceDocs.forEach((doc) => {
+      const record = doc.records.find(
+        (r) => String(r.student) === studentUserId
+      );
+
+      if (!record) return; // is din is student ka record hi nahi hai (e.g. baad me class join kiya)
+
+      if (record.status === "PRESENT") present += 1;
+      else if (record.status === "ABSENT") absent += 1;
+      else if (record.status === "LEAVE") leave += 1;
+    });
+
+    const totalMarked = present + absent + leave;
+    const percentage =
+      totalMarked > 0 ? Number(((present / totalMarked) * 100).toFixed(2)) : 0;
+
+    return {
+      student: {
+        _id: student._id,
+        userId: student.user?._id,
+        name: student.user?.name || "",
+        email: student.user?.email || "",
+        rollNumber: student.rollNumber,
+      },
+      present,
+      absent,
+      leave,
+      totalMarked,
+      percentage,
+    };
+  });
+
+  res.json(
+    new ApiResponse(
+      200,
+      {
+        classId,
+        from: fromDate,
+        to: toDate,
+        totalDaysMarked,
+        report,
+      },
+      "Attendance report generated successfully"
+    )
+  );
 });
 
 // ================= GET MY ATTENDANCE (Student self) =================

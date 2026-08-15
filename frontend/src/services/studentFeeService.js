@@ -17,3 +17,4 @@ export const getClassFeeSummary = (params) => api.get(`${BASE}/class-summary`, {
 export const getDueList = (params) => api.get(`${BASE}/due-list`, { params });
 export const getStudentFeeByStudentId = (studentId) => api.get(`${BASE}/by-student/${studentId}`);
 export const getFeeDashboard = (params) => api.get(`${BASE}/dashboard`, { params });
+export const getMyClassFeeSummary = (params) => api.get(`${BASE}/my-class-summary`, { params });

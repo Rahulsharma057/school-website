@@ -1,7 +1,7 @@
 "use client";
 
 import { Box, Typography } from "@mui/material";
-import PaymentsTable from "@/components/admin/fees/PaymentsTable";
+import PaymentsTable from "@/components/admin/fees/PaymentTable";
 
 export default function PaymentsPage() {
   return (

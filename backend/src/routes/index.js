@@ -86,6 +86,8 @@ router.use("/timetable", require("./timetableRoutes"));
 router.use("/fee-structures", require("./feeStructureRoutes"));
 router.use("/student-fees", require("./studentFeeRoutes"));
 router.use("/fee-payments", require("./feePaymentRoutes"));
+router.use("/tasks", require("./taskRoutes"));
+router.use("/assessments", require("./assessmentRoutes"));
 router.get("/", (req, res) => {
   res.json({
     success: true,

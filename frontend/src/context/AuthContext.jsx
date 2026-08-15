@@ -18,7 +18,7 @@ const AuthContext = createContext();
 const getRedirectPath = (role) => {
   const staffRoles = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "ACCOUNTANT"];
   if (staffRoles.includes(role)) {
-    return "/admin/dashboard";
+    return "/admin/classes";
   }
   // STUDENT, TEACHER, PARENT
   return "/";

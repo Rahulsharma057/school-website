@@ -41,7 +41,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import DashboardIcon from "@mui/icons-material/Dashboard";
-
+import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import { useAuth } from "@/context/AuthContext";
 
 const DRAWER_WIDTH = 260;
@@ -50,11 +50,7 @@ const MOBILE_HEADER_HEIGHT = 60;
 const TABLET_HEADER_HEIGHT = 64;
 const DESKTOP_HEADER_HEIGHT = 70;
 
-const STAFF_ALL = [
-  "SUPER_ADMIN",
-  "ADMIN",
-  "PRINCIPAL",
-];
+const STAFF_ALL = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
 
 const STAFF_WITH_ACCOUNTANT = [
   "SUPER_ADMIN",
@@ -273,6 +269,13 @@ const schoolMenu = [
     icon: <WarningAmberIcon />,
     roles: STAFF_WITH_ACCOUNTANT,
   },
+  {
+    title: "Tasks",
+    path: "/admin/tasks",
+    icon: <AssignmentOutlinedIcon />,
+    roles: STAFF_ALL,
+   // visible: true,
+  },
 ];
 
 /* =====================================================
@@ -282,21 +285,14 @@ const schoolMenu = [
 const filterByRole = (items, role) => {
   if (!role) return [];
 
-  return items.filter(
-    (item) => !item.roles || item.roles.includes(role)
-  );
+  return items.filter((item) => !item.roles || item.roles.includes(role));
 };
 
 /* =====================================================
    MENU SECTION
 ===================================================== */
 
-function MenuSection({
-  items,
-  pathname,
-  handleDrawerToggle,
-  isMobile,
-}) {
+function MenuSection({ items, pathname, handleDrawerToggle, isMobile }) {
   if (!items.length) return null;
 
   return (
@@ -319,33 +315,21 @@ function MenuSection({
             <ListItemButton
               component={Link}
               href={item.path}
-              onClick={
-                isMobile
-                  ? handleDrawerToggle
-                  : undefined
-              }
+              onClick={isMobile ? handleDrawerToggle : undefined}
               selected={isActive}
               sx={{
                 minHeight: 44,
                 borderRadius: "10px",
                 px: 1.5,
 
-                color: isActive
-                  ? "#2563eb"
-                  : "#64748b",
+                color: isActive ? "#2563eb" : "#64748b",
 
-                backgroundColor: isActive
-                  ? "#eff6ff"
-                  : "transparent",
+                backgroundColor: isActive ? "#eff6ff" : "transparent",
 
                 "&:hover": {
-                  backgroundColor: isActive
-                    ? "#eff6ff"
-                    : "#f1f5f9",
+                  backgroundColor: isActive ? "#eff6ff" : "#f1f5f9",
 
-                  color: isActive
-                    ? "#2563eb"
-                    : "#1e293b",
+                  color: isActive ? "#2563eb" : "#1e293b",
                 },
 
                 "&.Mui-selected": {
@@ -387,24 +371,15 @@ function MenuSection({
    SIDEBAR
 ===================================================== */
 
-export default function Sidebar({
-  mobileOpen,
-  handleDrawerToggle,
-}) {
+export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
   const pathname = usePathname();
   const { user } = useAuth();
 
   const role = user?.role;
 
-  const visibleSchoolMenu = filterByRole(
-    schoolMenu,
-    role
-  );
+  const visibleSchoolMenu = filterByRole(schoolMenu, role);
 
-  const visibleContentMenu = filterByRole(
-    contentMenu,
-    role
-  );
+  const visibleContentMenu = filterByRole(contentMenu, role);
 
   /* =====================================================
      DRAWER CONTENT
@@ -521,10 +496,9 @@ export default function Sidebar({
           </Box>
         )}
 
-        {visibleSchoolMenu.length > 0 &&
-          visibleContentMenu.length > 0 && (
-            <Divider sx={{ mx: 2 }} />
-          )}
+        {visibleSchoolMenu.length > 0 && visibleContentMenu.length > 0 && (
+          <Divider sx={{ mx: 2 }} />
+        )}
 
         {/* WEBSITE CONTENT */}
 
@@ -734,10 +708,9 @@ export default function Sidebar({
               </Box>
             )}
 
-            {visibleSchoolMenu.length > 0 &&
-              visibleContentMenu.length > 0 && (
-                <Divider sx={{ mx: 2 }} />
-              )}
+            {visibleSchoolMenu.length > 0 && visibleContentMenu.length > 0 && (
+              <Divider sx={{ mx: 2 }} />
+            )}
 
             {visibleContentMenu.length > 0 && (
               <Box sx={{ p: 2 }}>

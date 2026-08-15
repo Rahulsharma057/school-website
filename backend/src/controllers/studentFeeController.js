@@ -5,7 +5,7 @@ const StudentFee = require("../models/StudentFee");
 const FeeStructure = require("../models/FeeStructure");
 const StudentProfile = require("../models/StudentProfile");
 const FeePayment = require("../models/FeePayment");
-
+const TeacherAssignment = require("../models/TeacherAssignment");
 const {
   buildComponentFromStructure,
   splitIntoInstallments,
@@ -551,6 +551,51 @@ exports.getFeeDashboard = asyncHandler(async (req, res) => {
       200,
       { overall, classWise: classWiseAgg, monthWise },
       "Dashboard stats fetched successfully",
+    ),
+  );
+});
+// ================= MY CLASS FEE SUMMARY (teacher, read-only, own class only) =================
+// Resolves the teacher's own assigned class server-side — never trusts a
+// classId from the client — so a teacher can only ever see their own
+// class's fee data, unlike getClassFeeSummary (admin-only, arbitrary classId).
+
+exports.getMyClassFeeSummary = asyncHandler(async (req, res) => {
+  const { academicYear } = req.query;
+
+  if (!academicYear) {
+    throw new ApiError(400, "academicYear is required");
+  }
+
+  const assignment = await TeacherAssignment.findOne({
+    teacher: req.user._id,
+    isClassTeacher: true,
+    status: "ACTIVE",
+  });
+
+  if (!assignment) {
+    throw new ApiError(404, "No class assigned to you yet");
+  }
+
+  const records = await StudentFee.find({
+    class: assignment.class,
+    academicYear,
+  })
+    .populate({
+      path: "student",
+      select: "rollNumber user",
+      populate: {
+        path: "user",
+        select: "name email",
+      },
+    })
+    .select("student totalAmount totalPaid totalDue status")
+    .sort({ totalDue: -1 });
+
+  return res.json(
+    new ApiResponse(
+      200,
+      records,
+      "Class fee summary fetched successfully",
     ),
   );
 });

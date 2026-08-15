@@ -7,6 +7,7 @@ import {
   assignFeeToStudent,
   bulkAssignFeeToClass,
   getStudentFee,
+  getMyFee,
   updateStudentFeeComponent,
   addCustomFeeComponent,
   removeCustomFeeComponent,
@@ -132,4 +133,11 @@ export const useFeeDashboard = (params) =>
     queryKey: ["fee-dashboard", params],
     queryFn: async () => (await getFeeDashboard(params)).data?.data,
     placeholderData: (prev) => prev, // avoid chart flicker while filters change
+  });
+
+  export const useMyFee = () =>
+  useQuery({
+    queryKey: ["my-fee"],
+    queryFn: async () => (await getMyFee()).data?.data,
+    retry: false,
   });
