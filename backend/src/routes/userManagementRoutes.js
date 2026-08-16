@@ -11,7 +11,9 @@ const {
 
   changeRole,
 
-  changeStatus,deleteUser
+  changeStatus,
+  deleteUser,
+  updateUserCoreInfo, // ← import add kiya
 } = require("../controllers/userManagementController");
 
 router.get(
@@ -44,11 +46,19 @@ router.patch(
   changeStatus,
 );
 
-router.delete(
-"/:id",
-authMiddleware,
-allowRoles("SUPER_ADMIN"),
-deleteUser
+// ==========================
+// UPDATE CORE INFO (name/email/phone) — Principal bhi kar sake, isliye alag allowRoles
+// ==========================
+router.patch(
+  "/:id/core-info",
+
+  authMiddleware,
+
+  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+
+  updateUserCoreInfo,
 );
+
+router.delete("/:id", authMiddleware, allowRoles("SUPER_ADMIN"), deleteUser);
 
 module.exports = router;

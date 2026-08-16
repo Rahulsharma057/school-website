@@ -15,7 +15,7 @@ import {
 
 import { DataGrid } from "@mui/x-data-grid";
 
-import useUsers from "@/hooks/useUsers";
+import { useUsers } from "@/hooks/useUsers";
 
 import {
   changeUserRole,

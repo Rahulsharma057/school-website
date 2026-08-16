@@ -1,8 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createTeacher, getMyTeacherProfile, getAllTeachers } from "@/services/teacherService";
-//                                                    ^^^^^^^^^^^^^^ ye add karo
+import {
+  createTeacher,
+  getMyTeacherProfile,
+  updateMyTeacherProfile,
+  getAllTeachers,
+  updateTeacherByAdmin,
+  uploadTeacherAadhar,  uploadMyTeacherProfilePhoto,
+} from "@/services/teacherService";
 import { toast } from "react-toastify";
 
 export function useCreateTeacher() {
@@ -32,6 +38,22 @@ export function useMyTeacherProfile() {
   });
 }
 
+// UPDATE MY PROFILE (teacher khud — sirf self-editable fields: profilePhoto, bio)
+export function useUpdateMyTeacherProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => updateMyTeacherProfile(data),
+    onSuccess: () => {
+      toast.success("Profile updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["my-teacher-profile"] });
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to update profile");
+    },
+  });
+}
+
 export function useAllTeachers() {
   return useQuery({
     queryKey: ["teachers"],
@@ -40,5 +62,62 @@ export function useAllTeachers() {
       return res.data.data;
     },
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+// ADMIN — kisi bhi teacher ki admin-only fields update karo
+export function useUpdateTeacherByAdmin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ teacherId, data }) => updateTeacherByAdmin(teacherId, data),
+    onSuccess: () => {
+      toast.success("Teacher updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["teachers"] });
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to update teacher");
+    },
+  });
+}
+
+// ADMIN — Aadhar card upload
+export function useUploadTeacherAadhar() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ teacherId, formData }) => uploadTeacherAadhar(teacherId, formData),
+    onSuccess: () => {
+      toast.success("Aadhar card uploaded successfully");
+      queryClient.invalidateQueries({ queryKey: ["teachers"] });
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to upload Aadhar card");
+    },
+  });
+}
+
+// TEACHER — apni profile photo upload
+export function useUploadMyTeacherProfilePhoto() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (formData) =>
+      uploadMyTeacherProfilePhoto(formData),
+
+    onSuccess: () => {
+      toast.success("Profile photo uploaded successfully");
+
+      queryClient.invalidateQueries({
+        queryKey: ["my-teacher-profile"],
+      });
+    },
+
+    onError: (error) => {
+      toast.error(
+        error.response?.data?.message ||
+          "Failed to upload profile photo"
+      );
+    },
   });
 }

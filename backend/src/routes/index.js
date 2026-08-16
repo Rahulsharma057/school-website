@@ -88,6 +88,7 @@ router.use("/student-fees", require("./studentFeeRoutes"));
 router.use("/fee-payments", require("./feePaymentRoutes"));
 router.use("/tasks", require("./taskRoutes"));
 router.use("/assessments", require("./assessmentRoutes"));
+router.use("/chat", require("./chatRoutes"));
 router.get("/", (req, res) => {
   res.json({
     success: true,

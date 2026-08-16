@@ -26,7 +26,7 @@ import PaidOutlinedIcon from "@mui/icons-material/PaidOutlined";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import QuizOutlinedIcon from "@mui/icons-material/QuizOutlined";
 import AssignmentTurnedInOutlinedIcon from "@mui/icons-material/AssignmentTurnedInOutlined";
-
+import ChatOutlinedIcon from "@mui/icons-material/ChatOutlined";
 import { useAuth } from "@/context/AuthContext";
 import filterMenuByRole from "@/utils/filterMenuByRole";
 
@@ -68,6 +68,7 @@ const portalMenu = [
     roles: ["STUDENT", "TEACHER"],
     visible: true,
   },
+
   {
     title: "My Fees",
     path: "/portal/fees",
@@ -140,19 +141,20 @@ const portalMenu = [
     roles: ["TEACHER"],
     visible: true,
   },
+  {
+    title: "Chat",
+    path: "/portal/chat",
+    icon: <ChatOutlinedIcon />,
+    roles: ["STUDENT", "TEACHER"],
+    visible: true,
+  },
 ];
 
-export default function PortalSidebar({
-  mobileOpen,
-  handleDrawerToggle,
-}) {
+export default function PortalSidebar({ mobileOpen, handleDrawerToggle }) {
   const pathname = usePathname();
   const { user } = useAuth();
 
-  const visibleMenu = filterMenuByRole(
-    portalMenu,
-    user?.role
-  );
+  const visibleMenu = filterMenuByRole(portalMenu, user?.role);
 
   const drawerContent = (
     <Box
@@ -179,9 +181,7 @@ export default function PortalSidebar({
           }}
         >
           MY
-          <span style={{ color: "#3b82f6" }}>
-            PORTAL
-          </span>
+          <span style={{ color: "#3b82f6" }}>PORTAL</span>
         </Typography>
       </Toolbar>
 
@@ -202,8 +202,8 @@ export default function PortalSidebar({
             {user.role === "STUDENT"
               ? "STUDENT MENU"
               : user.role === "TEACHER"
-              ? "TEACHER MENU"
-              : "MY ACCOUNT"}
+                ? "TEACHER MENU"
+                : "MY ACCOUNT"}
           </Typography>
         )}
 
@@ -213,15 +213,10 @@ export default function PortalSidebar({
              * Exact path OR nested route
              */
             const isActive =
-              pathname === item.path ||
-              pathname.startsWith(`${item.path}/`);
+              pathname === item.path || pathname.startsWith(`${item.path}/`);
 
             return (
-              <ListItem
-                key={item.path}
-                disablePadding
-                sx={{ mb: 0.5 }}
-              >
+              <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
                 <ListItemButton
                   component={Link}
                   href={item.path}
@@ -230,22 +225,14 @@ export default function PortalSidebar({
                     borderRadius: "12px",
                     transition: "all 0.2s ease",
 
-                    backgroundColor: isActive
-                      ? "#eff6ff"
-                      : "transparent",
+                    backgroundColor: isActive ? "#eff6ff" : "transparent",
 
-                    color: isActive
-                      ? "#2563eb"
-                      : "#64748b",
+                    color: isActive ? "#2563eb" : "#64748b",
 
                     "&:hover": {
-                      backgroundColor: isActive
-                        ? "#eff6ff"
-                        : "#f1f5f9",
+                      backgroundColor: isActive ? "#eff6ff" : "#f1f5f9",
 
-                      color: isActive
-                        ? "#2563eb"
-                        : "#1e293b",
+                      color: isActive ? "#2563eb" : "#1e293b",
                     },
                   }}
                 >

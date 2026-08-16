@@ -41,6 +41,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import DashboardIcon from "@mui/icons-material/Dashboard";
+import ChatOutlinedIcon from "@mui/icons-material/ChatOutlined";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import { useAuth } from "@/context/AuthContext";
 
@@ -276,6 +277,7 @@ const schoolMenu = [
     roles: STAFF_ALL,
    // visible: true,
   },
+  { title: "Chat", path: "/admin/chat", icon: <ChatOutlinedIcon />, roles: STAFF_ALL },
 ];
 
 /* =====================================================

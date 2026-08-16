@@ -1,10 +1,17 @@
 const express = require("express");
 const router = express.Router();
-
+const documentUpload = require("../middlewares/documentUpload");
 const authMiddleware = require("../middlewares/authMiddleware");
 const allowRoles = require("../middlewares/roleMiddleware");
 
-const {createTeacher, getMyTeacherProfile, getAllTeachers } = require("../controllers/teacherController");
+const {
+  createTeacher,
+  getMyTeacherProfile,
+  updateMyTeacherProfile,
+  updateTeacherByAdmin,
+  getAllTeachers,uploadTeacherAadhar,
+  uploadMyTeacherProfilePhoto,
+} = require("../controllers/teacherController");
 
 router.post(
   "/",
@@ -20,6 +27,14 @@ router.get(
   getMyTeacherProfile
 );
 
+// Teacher khud apni profile ke SELF_EDITABLE_FIELDS (phone, profilePhoto,
+// bio, emergencyContact, address) update kar sakta hai.
+router.patch(
+  "/my-profile",
+  authMiddleware,
+  allowRoles("TEACHER"),
+  updateMyTeacherProfile
+);
 
 router.get(
   "/",
@@ -28,4 +43,30 @@ router.get(
   getAllTeachers
 );
 
-module.exports = router;    
+// ==========================
+// UPDATE TEACHER (ADMIN-ONLY FIELDS) — Principal/Admin/SuperAdmin
+// qualification, status, employeeId, joiningDate, experienceYears,
+// subjects, classTeacherOf, leftReason, leftDate
+// ==========================
+router.patch(
+  "/:teacherId",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+  updateTeacherByAdmin
+);
+
+router.post(
+  "/:teacherId/aadhar",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+  documentUpload.single("file"),
+  uploadTeacherAadhar
+);
+router.post(
+  "/me/profile-photo",
+  authMiddleware,
+  allowRoles("TEACHER"),
+  documentUpload.single("file"),
+  uploadMyTeacherProfilePhoto
+);
+module.exports = router;
