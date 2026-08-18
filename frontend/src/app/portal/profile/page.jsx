@@ -4,20 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
 import {
-  Box,
-  Typography,
-  Paper,
-  CircularProgress,
+  Alert,
   Avatar,
-  Grid,
-  TextField,
+  Box,
   Button,
   Chip,
+  CircularProgress,
   Divider,
-  Stack,
+  Grid,
   IconButton,
+  Paper,
+  Stack,
+  TextField,
   Tooltip,
-  Alert,
+  Typography,
 } from "@mui/material";
 
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -32,17 +32,23 @@ import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined
 import LocationOnOutlinedIcon from "@mui/icons-material/LocationOnOutlined";
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
 
 import {
   useMyStudentProfile,
   useUpdateMyStudentProfile,
   useUploadMyStudentProfilePhoto,
+  useDownloadMyStudentProfile,
+  useUploadMyStudentDocument,
 } from "@/hooks/useStudent";
 
 import {
   useMyTeacherProfile,
   useUpdateMyTeacherProfile,
   useUploadMyTeacherProfilePhoto,
+useUploadTeacherDocument,
 } from "@/hooks/useTeacher";
 
 // ======================================================
@@ -50,15 +56,15 @@ import {
 // ======================================================
 
 const getInitials = (name = "") => {
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
-    .join("");
-
-  return initials || "U";
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word.charAt(0).toUpperCase())
+      .join("") || "U"
+  );
 };
 
 const formatDate = (date) => {
@@ -78,11 +84,7 @@ const formatDate = (date) => {
 };
 
 const safeValue = (value) => {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
+  if (value === null || value === undefined || value === "") {
     return "—";
   }
 
@@ -90,11 +92,8 @@ const safeValue = (value) => {
 };
 
 const MAX_PHOTO_SIZE_MB = 5;
-const ALLOWED_PHOTO_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-];
+
+const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const validatePhotoFile = (file) => {
   if (!file) return "";
@@ -104,7 +103,34 @@ const validatePhotoFile = (file) => {
   }
 
   if (file.size > MAX_PHOTO_SIZE_MB * 1024 * 1024) {
-    return `Image must be smaller than ${MAX_PHOTO_SIZE_MB}MB.`;
+    return "Image must be smaller than 5MB.";
+  }
+
+  return "";
+};
+
+// ======================================================
+// DOCUMENT VALIDATION
+// ======================================================
+
+const ALLOWED_DOCUMENT_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/jpg",
+];
+
+const MAX_DOCUMENT_SIZE_MB = 5;
+
+const validateDocumentFile = (file) => {
+  if (!file) return "";
+
+  if (!ALLOWED_DOCUMENT_TYPES.includes(file.type)) {
+    return "Only PDF, JPG or PNG files are allowed.";
+  }
+
+  if (file.size > MAX_DOCUMENT_SIZE_MB * 1024 * 1024) {
+    return "Document must be smaller than 5MB.";
   }
 
   return "";
@@ -114,13 +140,7 @@ const validatePhotoFile = (file) => {
 // SECTION CARD
 // ======================================================
 
-function SectionCard({
-  icon,
-  title,
-  subtitle,
-  action,
-  children,
-}) {
+function SectionCard({ icon, title, subtitle, action, children }) {
   return (
     <Paper
       elevation={0}
@@ -130,23 +150,17 @@ function SectionCard({
           sm: 2.5,
           md: 3,
         },
-
         borderRadius: {
           xs: 2.5,
           md: 3,
         },
-
         border: "1px solid #e5e7eb",
-
         backgroundColor: "#fff",
-
         mb: {
           xs: 2,
           md: 2.5,
         },
-
-        boxShadow:
-          "0 2px 10px rgba(15, 23, 42, 0.03)",
+        boxShadow: "0 2px 10px rgba(15,23,42,0.03)",
       }}
     >
       <Stack
@@ -163,30 +177,23 @@ function SectionCard({
           sm: "center",
         }}
         justifyContent="space-between"
-        sx={{
-          mb: 2,
-        }}
+        sx={{ mb: 2 }}
       >
         <Stack
           direction="row"
           spacing={1.25}
           alignItems="center"
-          sx={{
-            minWidth: 0,
-          }}
+          sx={{ minWidth: 0 }}
         >
           <Box
             sx={{
               width: 38,
               height: 38,
               minWidth: 38,
-
               borderRadius: 2,
-
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-
               backgroundColor: "#eef2ff",
               color: "#3150fd",
             }}
@@ -194,18 +201,13 @@ function SectionCard({
             {icon}
           </Box>
 
-          <Box
-            sx={{
-              minWidth: 0,
-            }}
-          >
+          <Box sx={{ minWidth: 0 }}>
             <Typography
               sx={{
                 fontSize: {
                   xs: 15,
                   sm: 16,
                 },
-
                 fontWeight: 700,
                 color: "#111827",
               }}
@@ -246,11 +248,7 @@ function SectionCard({
         )}
       </Stack>
 
-      <Divider
-        sx={{
-          mb: 2.5,
-        }}
-      />
+      <Divider sx={{ mb: 2.5 }} />
 
       {children}
     </Paper>
@@ -261,11 +259,7 @@ function SectionCard({
 // READ FIELD
 // ======================================================
 
-function ReadField({
-  label,
-  value,
-  icon,
-}) {
+function ReadField({ label, value, icon }) {
   const displayValue = safeValue(value);
 
   return (
@@ -275,30 +269,18 @@ function ReadField({
           xs: 1.25,
           sm: 1.5,
         },
-
         borderRadius: 2,
-
         backgroundColor: "#f8fafc",
         border: "1px solid #eef0f3",
-
         minHeight: 66,
-
-        transition: "all 0.2s ease",
-
+        transition: "all .2s ease",
         "&:hover": {
           borderColor: "#dbe1ea",
           backgroundColor: "#f6f8fb",
         },
       }}
     >
-      <Stack
-        direction="row"
-        spacing={0.6}
-        alignItems="center"
-        sx={{
-          mb: 0.5,
-        }}
-      >
+      <Stack direction="row" spacing={0.6} alignItems="center" sx={{ mb: 0.5 }}>
         {icon && (
           <Box
             sx={{
@@ -315,7 +297,6 @@ function ReadField({
             fontSize: 11.5,
             color: "#6b7280",
             fontWeight: 600,
-
             textTransform: "uppercase",
             letterSpacing: 0.25,
           }}
@@ -328,12 +309,7 @@ function ReadField({
         sx={{
           fontSize: 14,
           fontWeight: 600,
-
-          color:
-            displayValue === "—"
-              ? "#9ca3af"
-              : "#1f2937",
-
+          color: displayValue === "—" ? "#9ca3af" : "#1f2937",
           wordBreak: "break-word",
           lineHeight: 1.45,
         }}
@@ -348,28 +324,12 @@ function ReadField({
 // PROFILE HEADER
 // ======================================================
 
-function ProfileHeader({
-  profile,
-  type,
-}) {
-  const name =
-    profile?.user?.name || "User";
+function ProfileHeader({ profile, type }) {
+  const name = profile?.user?.name || "User";
 
-  const email =
-    profile?.user?.email || "";
+  const email = profile?.user?.email || "";
 
-  const isStudent =
-    type === "student";
-
-  const roleLabel = isStudent
-    ? "Student"
-    : "Teacher";
-
-  const className =
-    profile?.class?.className;
-
-  const section =
-    profile?.class?.section;
+  const isStudent = type === "student";
 
   return (
     <Paper
@@ -380,52 +340,38 @@ function ProfileHeader({
           sm: 2.5,
           md: 3,
         },
-
         borderRadius: {
           xs: 2.5,
           md: 3,
         },
-
         border: "1px solid #e5e7eb",
-
         mb: {
           xs: 2,
           md: 2.5,
         },
-
         overflow: "hidden",
         position: "relative",
-
-        background:
-          "linear-gradient(135deg, #ffffff 0%, #f5f7ff 100%)",
+        background: "linear-gradient(135deg,#fff 0%,#f5f7ff 100%)",
       }}
     >
-      {/* Decorative Circle */}
       <Box
         sx={{
           position: "absolute",
-
           width: {
             xs: 130,
             sm: 180,
           },
-
           height: {
             xs: 130,
             sm: 180,
           },
-
           borderRadius: "50%",
-
           backgroundColor: "#3150fd",
-
           opacity: 0.035,
-
           right: {
             xs: -60,
             sm: -70,
           },
-
           top: {
             xs: -60,
             sm: -80,
@@ -450,46 +396,32 @@ function ProfileHeader({
           position: "relative",
         }}
       >
-        {/* Avatar */}
         <Avatar
-          src={
-            profile?.profilePhoto ||
-            undefined
-          }
+          src={profile?.profilePhoto || undefined}
           alt={name}
           sx={{
             width: {
               xs: 72,
               sm: 82,
             },
-
             height: {
               xs: 72,
               sm: 82,
             },
-
             fontSize: {
               xs: 24,
               sm: 28,
             },
-
             fontWeight: 700,
-
             bgcolor: "#3150fd",
-
-            border:
-              "4px solid #ffffff",
-
-            boxShadow:
-              "0 4px 15px rgba(49, 80, 253, 0.18)",
-
+            border: "4px solid #fff",
+            boxShadow: "0 4px 15px rgba(49,80,253,.18)",
             flexShrink: 0,
           }}
         >
           {getInitials(name)}
         </Avatar>
 
-        {/* User Info */}
         <Box
           sx={{
             minWidth: 0,
@@ -504,20 +436,15 @@ function ProfileHeader({
                 sm: 24,
                 md: 26,
               },
-
               lineHeight: 1.2,
-
               fontWeight: 750,
-
               color: "#111827",
-
               wordBreak: "break-word",
             }}
           >
             {name}
           </Typography>
 
-          {/* Email */}
           <Stack
             direction="row"
             spacing={0.75}
@@ -539,43 +466,31 @@ function ProfileHeader({
               sx={{
                 fontSize: 13,
                 color: "#6b7280",
-
                 overflow: "hidden",
                 textOverflow: "ellipsis",
-
                 wordBreak: "break-word",
               }}
             >
-              {email ||
-                "No email available"}
+              {email || "No email available"}
             </Typography>
           </Stack>
 
-          {/* Chips */}
           <Stack
             direction="row"
             spacing={0.75}
             useFlexGap
             flexWrap="wrap"
-            sx={{
-              mt: 1.5,
-            }}
+            sx={{ mt: 1.5 }}
           >
             <Chip
               size="small"
-              icon={
-                <PersonOutlineOutlinedIcon />
-              }
-              label={roleLabel}
+              icon={<PersonOutlineOutlinedIcon />}
+              label={isStudent ? "Student" : "Teacher"}
               sx={{
                 height: 28,
                 fontWeight: 600,
-
-                backgroundColor:
-                  "#eef2ff",
-
+                backgroundColor: "#eef2ff",
                 color: "#3150fd",
-
                 "& .MuiChip-icon": {
                   color: "#3150fd",
                   fontSize: 17,
@@ -587,10 +502,8 @@ function ProfileHeader({
               <>
                 <Chip
                   size="small"
-                  label={`${safeValue(
-                    className
-                  )} - ${safeValue(
-                    section
+                  label={`${safeValue(profile?.class?.className)} - ${safeValue(
+                    profile?.class?.section,
                   )}`}
                   variant="outlined"
                   sx={{
@@ -601,9 +514,7 @@ function ProfileHeader({
 
                 <Chip
                   size="small"
-                  label={`Roll No. ${safeValue(
-                    profile?.rollNumber
-                  )}`}
+                  label={`Roll No. ${safeValue(profile?.rollNumber)}`}
                   variant="outlined"
                   sx={{
                     height: 28,
@@ -613,64 +524,44 @@ function ProfileHeader({
               </>
             )}
 
-            {!isStudent &&
-              profile?.qualification && (
-                <Chip
-                  size="small"
-                  label={
-                    profile.qualification
-                  }
-                  variant="outlined"
-                  sx={{
-                    height: 28,
-                    fontWeight: 600,
-                  }}
-                />
-              )}
+            {!isStudent && profile?.qualification && (
+              <Chip
+                size="small"
+                label={profile.qualification}
+                variant="outlined"
+                sx={{
+                  height: 28,
+                  fontWeight: 600,
+                }}
+              />
+            )}
 
-            {!isStudent &&
-              profile?.classTeacherOf
-                ?.className && (
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={`Class Teacher: ${
-                    profile.classTeacherOf
-                      .className
-                  } - ${
-                    profile.classTeacherOf
-                      .section || "—"
-                  }`}
-                  sx={{
-                    height: 28,
-                    fontWeight: 600,
-
-                    maxWidth: {
-                      xs: "100%",
-                      sm: "none",
-                    },
-
-                    "& .MuiChip-label": {
-                      overflow: "hidden",
-                      textOverflow:
-                        "ellipsis",
-                    },
-                  }}
-                />
-              )}
+            {!isStudent && profile?.classTeacherOf?.className && (
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`Class Teacher: ${profile.classTeacherOf.className} - ${
+                  profile.classTeacherOf.section || "—"
+                }`}
+                sx={{
+                  height: 28,
+                  fontWeight: 600,
+                  maxWidth: {
+                    xs: "100%",
+                    sm: "none",
+                  },
+                  "& .MuiChip-label": {
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  },
+                }}
+              />
+            )}
 
             <Chip
               size="small"
-              label={
-                profile?.status ||
-                "—"
-              }
-              color={
-                profile?.status ===
-                "ACTIVE"
-                  ? "success"
-                  : "default"
-              }
+              label={profile?.status || "—"}
+              color={profile?.status === "ACTIVE" ? "success" : "default"}
               sx={{
                 height: 28,
                 fontWeight: 600,
@@ -684,25 +575,16 @@ function ProfileHeader({
 }
 
 // ======================================================
-// PROFILE PHOTO UPLOADER
-// (replaces the old URL-based ProfilePhotoPreview)
+// PHOTO UPLOADER
 // ======================================================
 
-function ProfilePhotoUploader({
-  currentUrl,
-  name,
-  onUpload,
-  isUploading,
-}) {
+function ProfilePhotoUploader({ currentUrl, name, onUpload, isUploading }) {
   const fileInputRef = useRef(null);
 
-  const [previewUrl, setPreviewUrl] =
-    useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
 
-  const [localError, setLocalError] =
-    useState("");
+  const [localError, setLocalError] = useState("");
 
-  // Revoke object URL on unmount / change to avoid memory leaks
   useEffect(() => {
     return () => {
       if (previewUrl) {
@@ -711,14 +593,9 @@ function ProfilePhotoUploader({
     };
   }, [previewUrl]);
 
-  const handlePickClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (event) => {
+  const handleChange = (event) => {
     const file = event.target.files?.[0];
 
-    // reset input so choosing the same file again still fires onChange
     event.target.value = "";
 
     if (!file) return;
@@ -736,7 +613,9 @@ function ProfilePhotoUploader({
       URL.revokeObjectURL(previewUrl);
     }
 
-    setPreviewUrl(URL.createObjectURL(file));
+    const objectUrl = URL.createObjectURL(file);
+
+    setPreviewUrl(objectUrl);
 
     onUpload(file);
   };
@@ -747,19 +626,13 @@ function ProfilePhotoUploader({
     <Box
       sx={{
         mt: 0.5,
-
         display: "flex",
         alignItems: "center",
         gap: 1.5,
-
         p: 1.5,
-
         borderRadius: 2,
-
         backgroundColor: "#f8fafc",
-
         border: "1px solid #eef0f3",
-
         flexWrap: "wrap",
       }}
     >
@@ -795,36 +668,30 @@ function ProfilePhotoUploader({
         <Typography
           sx={{
             fontSize: 12,
-            color: localError
-              ? "#dc2626"
-              : "#6b7280",
+            color: localError ? "#dc2626" : "#6b7280",
             mt: 0.25,
           }}
         >
-          {localError ||
-            "JPG, PNG or WEBP, up to 5MB."}
+          {localError || "JPG, PNG or WEBP, up to 5MB."}
         </Typography>
       </Box>
 
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png, image/jpeg, image/webp"
         hidden
-        onChange={handleFileChange}
+        accept="image/png,image/jpeg,image/webp"
+        onChange={handleChange}
       />
 
       <Button
         size="small"
         variant="outlined"
-        onClick={handlePickClick}
+        onClick={() => fileInputRef.current?.click()}
         disabled={isUploading}
         startIcon={
           isUploading ? (
-            <CircularProgress
-              size={14}
-              color="inherit"
-            />
+            <CircularProgress size={14} color="inherit" />
           ) : (
             <PhotoCameraOutlinedIcon fontSize="small" />
           )
@@ -835,10 +702,143 @@ function ProfilePhotoUploader({
           borderRadius: 1.5,
         }}
       >
-        {isUploading
-          ? "Uploading..."
-          : "Change Photo"}
+        {isUploading ? "Uploading..." : "Change Photo"}
       </Button>
+    </Box>
+  );
+}
+
+// ======================================================
+// DOCUMENT UPLOADER
+// ======================================================
+
+function DocumentUploader({ title, description, onUpload, isUploading }) {
+  const inputRef = useRef(null);
+
+  const [error, setError] = useState("");
+
+  const handleChange = (event) => {
+    const file = event.target.files?.[0];
+
+    event.target.value = "";
+
+    if (!file) return;
+
+    const validationError = validateDocumentFile(file);
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setError("");
+
+    const formData = new FormData();
+
+    formData.append("file", file);
+
+    onUpload(formData);
+  };
+
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        borderRadius: 2,
+        border: "1px solid #eef0f3",
+        backgroundColor: "#f8fafc",
+      }}
+    >
+      <Stack
+        direction={{
+          xs: "column",
+          sm: "row",
+        }}
+        spacing={1.5}
+        alignItems={{
+          xs: "flex-start",
+          sm: "center",
+        }}
+        justifyContent="space-between"
+      >
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          sx={{ minWidth: 0 }}
+        >
+          <Box
+            sx={{
+              width: 38,
+              height: 38,
+              borderRadius: 1.5,
+              backgroundColor: "#eef2ff",
+              color: "#3150fd",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <DescriptionOutlinedIcon fontSize="small" />
+          </Box>
+
+          <Box>
+            <Typography
+              sx={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#1f2937",
+              }}
+            >
+              {title}
+            </Typography>
+
+            <Typography
+              sx={{
+                fontSize: 12,
+                color: error ? "#dc2626" : "#6b7280",
+                mt: 0.25,
+              }}
+            >
+              {error || description || "PDF, JPG or PNG up to 5MB"}
+            </Typography>
+          </Box>
+        </Stack>
+
+        <input
+          ref={inputRef}
+          hidden
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png"
+          onChange={handleChange}
+        />
+
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => inputRef.current?.click()}
+          disabled={isUploading}
+          startIcon={
+            isUploading ? (
+              <CircularProgress size={14} color="inherit" />
+            ) : (
+              <CloudUploadOutlinedIcon fontSize="small" />
+            )
+          }
+          sx={{
+            textTransform: "none",
+            fontWeight: 600,
+            borderRadius: 1.5,
+            width: {
+              xs: "100%",
+              sm: "auto",
+            },
+          }}
+        >
+          {isUploading ? "Uploading..." : "Upload"}
+        </Button>
+      </Stack>
     </Box>
   );
 }
@@ -847,28 +847,19 @@ function ProfilePhotoUploader({
 // EDIT ACTIONS
 // ======================================================
 
-function EditActions({
-  editing,
-  isPending,
-  onEdit,
-  onCancel,
-  onSave,
-}) {
+function EditActions({ editing, isPending, onEdit, onCancel, onSave }) {
   if (!editing) {
     return (
       <Button
         size="small"
         variant="outlined"
-        startIcon={
-          <EditOutlinedIcon />
-        }
+        startIcon={<EditOutlinedIcon />}
         onClick={onEdit}
         sx={{
           textTransform: "none",
           fontWeight: 600,
           borderRadius: 1.5,
           px: 2,
-
           width: {
             xs: "100%",
             sm: "auto",
@@ -898,8 +889,7 @@ function EditActions({
             onClick={onCancel}
             disabled={isPending}
             sx={{
-              border:
-                "1px solid #e5e7eb",
+              border: "1px solid #e5e7eb",
               borderRadius: 1.5,
             }}
           >
@@ -913,10 +903,7 @@ function EditActions({
         variant="contained"
         startIcon={
           isPending ? (
-            <CircularProgress
-              size={15}
-              color="inherit"
-            />
+            <CircularProgress size={15} color="inherit" />
           ) : (
             <SaveOutlinedIcon />
           )
@@ -926,22 +913,16 @@ function EditActions({
         sx={{
           textTransform: "none",
           fontWeight: 600,
-
           borderRadius: 1.5,
-
           boxShadow: "none",
-
           px: 2,
-
           flex: {
             xs: 1,
             sm: "initial",
           },
         }}
       >
-        {isPending
-          ? "Saving..."
-          : "Save Changes"}
+        {isPending ? "Saving..." : "Save Changes"}
       </Button>
     </Stack>
   );
@@ -951,91 +932,95 @@ function EditActions({
 // DOCUMENT CARD
 // ======================================================
 
-function DocumentCard({
-  url,
-  title,
-}) {
+function DocumentCard({ url, title }) {
+  if (!url) return null;
+
   return (
     <Box
       sx={{
-        mt: 0.5,
-
         p: 1.5,
-
         borderRadius: 2,
-
         backgroundColor: "#f8fafc",
-
-        border:
-          "1px solid #eef0f3",
-
-        display: "flex",
-
-        flexDirection: {
-          xs: "column",
-          sm: "row",
-        },
-
-        alignItems: {
-          xs: "flex-start",
-          sm: "center",
-        },
-
-        justifyContent:
-          "space-between",
-
-        gap: 1.5,
+        border: "1px solid #eef0f3",
       }}
     >
-      <Box>
-        <Typography
-          sx={{
-            fontSize: 11.5,
-            color: "#6b7280",
-            fontWeight: 600,
-            textTransform:
-              "uppercase",
-            mb: 0.25,
-          }}
-        >
-          {title}
-        </Typography>
-
-        <Typography
-          sx={{
-            fontSize: 12.5,
-            color: "#64748b",
-          }}
-        >
-          Official document
-        </Typography>
-      </Box>
-
-      <Button
-        size="small"
-        variant="outlined"
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        sx={{
-          textTransform: "none",
-          fontWeight: 600,
-          borderRadius: 1.5,
-
-          width: {
-            xs: "100%",
-            sm: "auto",
-          },
+      <Stack
+        direction={{
+          xs: "column",
+          sm: "row",
         }}
+        spacing={1.5}
+        alignItems={{
+          xs: "flex-start",
+          sm: "center",
+        }}
+        justifyContent="space-between"
       >
-        View Document
-      </Button>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Box
+            sx={{
+              width: 38,
+              height: 38,
+              borderRadius: 1.5,
+              backgroundColor: "#eef2ff",
+              color: "#3150fd",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <DescriptionOutlinedIcon fontSize="small" />
+          </Box>
+
+          <Box>
+            <Typography
+              sx={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#1f2937",
+              }}
+            >
+              {title}
+            </Typography>
+
+            <Typography
+              sx={{
+                fontSize: 11.5,
+                color: "#64748b",
+                mt: 0.25,
+              }}
+            >
+              Official document
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Button
+          size="small"
+          variant="outlined"
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          startIcon={<DownloadOutlinedIcon fontSize="small" />}
+          sx={{
+            textTransform: "none",
+            fontWeight: 600,
+            borderRadius: 1.5,
+            width: {
+              xs: "100%",
+              sm: "auto",
+            },
+          }}
+        >
+          View / Download
+        </Button>
+      </Stack>
     </Box>
   );
 }
 
 // ======================================================
-// STUDENT
+// STUDENT FORM
 // ======================================================
 
 const STUDENT_EMPTY_FORM = {
@@ -1044,48 +1029,38 @@ const STUDENT_EMPTY_FORM = {
 };
 
 function StudentProfileView() {
-  const {
-    data: profile,
-    isLoading,
-    isError,
-  } = useMyStudentProfile();
+  const { data: profile, isLoading, isError } = useMyStudentProfile();
 
-  const {
-    mutate: updateProfile,
-    isPending,
-  } = useUpdateMyStudentProfile();
+  const { mutate: updateProfile, isPending } = useUpdateMyStudentProfile();
 
-  const {
-    mutate: uploadPhoto,
-    isPending: isUploadingPhoto,
-  } = useUploadMyStudentProfilePhoto();
+  const { mutate: uploadPhoto, isPending: isUploadingPhoto } =
+    useUploadMyStudentProfilePhoto();
 
-  const [editing, setEditing] =
-    useState(false);
+  const { mutate: downloadProfile, isPending: isDownloading } =
+    useDownloadMyStudentProfile();
 
-  const [form, setForm] = useState(
-    STUDENT_EMPTY_FORM
-  );
+ const {
+  mutate: uploadDocument,
+  isPending: isUploadingDocument,
+} = useUploadTeacherDocument();
 
-  const [formError, setFormError] =
-    useState("");
+  const [editing, setEditing] = useState(false);
+
+  const [form, setForm] = useState(STUDENT_EMPTY_FORM);
+
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     if (!profile || editing) return;
 
     setForm({
-      bloodGroup:
-        profile.bloodGroup || "",
-
+      bloodGroup: profile.bloodGroup || "",
       bio: profile.bio || "",
     });
   }, [profile, editing]);
 
   const handleChange = (event) => {
-    const {
-      name,
-      value,
-    } = event.target;
+    const { name, value } = event.target;
 
     setFormError("");
 
@@ -1096,13 +1071,9 @@ function StudentProfileView() {
   };
 
   const handleEdit = () => {
-    if (!profile) return;
-
     setForm({
-      bloodGroup:
-        profile.bloodGroup || "",
-
-      bio: profile.bio || "",
+      bloodGroup: profile?.bloodGroup || "",
+      bio: profile?.bio || "",
     });
 
     setFormError("");
@@ -1111,9 +1082,7 @@ function StudentProfileView() {
 
   const handleCancel = () => {
     setForm({
-      bloodGroup:
-        profile?.bloodGroup || "",
-
+      bloodGroup: profile?.bloodGroup || "",
       bio: profile?.bio || "",
     });
 
@@ -1123,10 +1092,14 @@ function StudentProfileView() {
 
   const handlePhotoUpload = (file) => {
     const formData = new FormData();
-    // backend multer expects field name "file"
+
     formData.append("file", file);
 
     uploadPhoto(formData);
+  };
+
+  const handleDocumentUpload = (formData) => {
+    uploadDocument(formData);
   };
 
   const handleSave = () => {
@@ -1135,9 +1108,7 @@ function StudentProfileView() {
     const bio = form.bio.trim();
 
     if (bio.length > 300) {
-      setFormError(
-        "Bio cannot be more than 300 characters."
-      );
+      setFormError("Bio cannot be more than 300 characters.");
       return;
     }
 
@@ -1145,16 +1116,14 @@ function StudentProfileView() {
 
     updateProfile(
       {
-        bloodGroup:
-          form.bloodGroup.trim(),
-
+        bloodGroup: form.bloodGroup.trim(),
         bio,
       },
       {
         onSuccess: () => {
           setEditing(false);
         },
-      }
+      },
     );
   };
 
@@ -1168,16 +1137,10 @@ function StudentProfileView() {
 
   return (
     <Box>
-      <ProfileHeader
-        profile={profile}
-        type="student"
-      />
+      <ProfileHeader profile={profile} type="student" />
 
-      {/* EDITABLE DETAILS */}
       <SectionCard
-        icon={
-          <EditOutlinedIcon fontSize="small" />
-        }
+        icon={<EditOutlinedIcon fontSize="small" />}
         title="Your Details"
         subtitle="You can update these details yourself"
         action={
@@ -1228,32 +1191,16 @@ function StudentProfileView() {
                   label="Blood Group"
                   name="bloodGroup"
                   value={form.bloodGroup}
-                  onChange={
-                    handleChange
-                  }
+                  onChange={handleChange}
                 >
-                  <option value="">
-                    Select Blood Group
-                  </option>
+                  <option value="">Select Blood Group</option>
 
-                  {[
-                    "A+",
-                    "A-",
-                    "B+",
-                    "B-",
-                    "AB+",
-                    "AB-",
-                    "O+",
-                    "O-",
-                  ].map(
-                    (bloodGroup) => (
-                      <option
-                        key={bloodGroup}
-                        value={bloodGroup}
-                      >
-                        {bloodGroup}
+                  {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(
+                    (group) => (
+                      <option key={group} value={group}>
+                        {group}
                       </option>
-                    )
+                    ),
                   )}
                 </TextField>
               </Grid>
@@ -1265,9 +1212,7 @@ function StudentProfileView() {
                   label="Bio"
                   name="bio"
                   value={form.bio}
-                  onChange={
-                    handleChange
-                  }
+                  onChange={handleChange}
                   multiline
                   minRows={3}
                   inputProps={{
@@ -1285,12 +1230,7 @@ function StudentProfileView() {
                   sm: 6,
                 }}
               >
-                <ReadField
-                  label="Blood Group"
-                  value={
-                    profile.bloodGroup
-                  }
-                />
+                <ReadField label="Blood Group" value={profile.bloodGroup} />
               </Grid>
 
               <Grid
@@ -1299,32 +1239,43 @@ function StudentProfileView() {
                   sm: 6,
                 }}
               >
-                <ReadField
-                  label="Profile Status"
-                  value={
-                    profile.status
-                  }
-                />
+                <ReadField label="Profile Status" value={profile.status} />
               </Grid>
 
               <Grid size={{ xs: 12 }}>
-                <ReadField
-                  label="Bio"
-                  value={profile.bio}
-                />
+                <ReadField label="Bio" value={profile.bio} />
               </Grid>
             </Grid>
           )}
         </Box>
       </SectionCard>
 
-      {/* OFFICIAL DETAILS */}
       <SectionCard
-        icon={
-          <LockOutlinedIcon fontSize="small" />
-        }
+        icon={<LockOutlinedIcon fontSize="small" />}
         title="Official Details"
         subtitle="These details are managed by the school admin"
+        action={
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => downloadProfile()}
+            disabled={isDownloading}
+            startIcon={
+              isDownloading ? (
+                <CircularProgress size={14} color="inherit" />
+              ) : (
+                <DownloadOutlinedIcon fontSize="small" />
+              )
+            }
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: 1.5,
+            }}
+          >
+            {isDownloading ? "Preparing..." : "Download PDF"}
+          </Button>
+        }
       >
         <Grid container spacing={1.5}>
           <Grid
@@ -1337,11 +1288,7 @@ function StudentProfileView() {
             <ReadField
               label="Phone"
               value={profile.phone}
-              icon={
-                <PhoneOutlinedIcon
-                  sx={{ fontSize: 15 }}
-                />
-              }
+              icon={<PhoneOutlinedIcon sx={{ fontSize: 15 }} />}
             />
           </Grid>
 
@@ -1354,14 +1301,8 @@ function StudentProfileView() {
           >
             <ReadField
               label="City"
-              value={
-                profile.address?.city
-              }
-              icon={
-                <LocationOnOutlinedIcon
-                  sx={{ fontSize: 15 }}
-                />
-              }
+              value={profile.address?.city}
+              icon={<LocationOnOutlinedIcon sx={{ fontSize: 15 }} />}
             />
           </Grid>
 
@@ -1374,14 +1315,8 @@ function StudentProfileView() {
           >
             <ReadField
               label="Admission Number"
-              value={
-                profile.admissionNumber
-              }
-              icon={
-                <BadgeOutlinedIcon
-                  sx={{ fontSize: 15 }}
-                />
-              }
+              value={profile.admissionNumber}
+              icon={<BadgeOutlinedIcon sx={{ fontSize: 15 }} />}
             />
           </Grid>
 
@@ -1394,14 +1329,8 @@ function StudentProfileView() {
           >
             <ReadField
               label="Admission Date"
-              value={formatDate(
-                profile.admissionDate
-              )}
-              icon={
-                <CalendarMonthOutlinedIcon
-                  sx={{ fontSize: 15 }}
-                />
-              }
+              value={formatDate(profile.admissionDate)}
+              icon={<CalendarMonthOutlinedIcon sx={{ fontSize: 15 }} />}
             />
           </Grid>
 
@@ -1414,14 +1343,8 @@ function StudentProfileView() {
           >
             <ReadField
               label="Date of Birth"
-              value={formatDate(
-                profile.dateOfBirth
-              )}
-              icon={
-                <CalendarMonthOutlinedIcon
-                  sx={{ fontSize: 15 }}
-                />
-              }
+              value={formatDate(profile.dateOfBirth)}
+              icon={<CalendarMonthOutlinedIcon sx={{ fontSize: 15 }} />}
             />
           </Grid>
 
@@ -1432,10 +1355,7 @@ function StudentProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="House"
-              value={profile.house}
-            />
+            <ReadField label="House" value={profile.house} />
           </Grid>
 
           <Grid
@@ -1445,12 +1365,7 @@ function StudentProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Previous School"
-              value={
-                profile.previousSchool
-              }
-            />
+            <ReadField label="Previous School" value={profile.previousSchool} />
           </Grid>
 
           <Grid
@@ -1460,12 +1375,29 @@ function StudentProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Parent / Guardian"
-              value={
-                profile.parent?.name
-              }
-            />
+            <ReadField label="Transport Mode" value={profile.transportMode} />
+          </Grid>
+
+          {profile.transportMode === "SCHOOL_BUS" && (
+            <Grid
+              size={{
+                xs: 12,
+                sm: 6,
+                md: 4,
+              }}
+            >
+              <ReadField label="Bus Route" value={profile.busRoute} />
+            </Grid>
+          )}
+
+          <Grid
+            size={{
+              xs: 12,
+              sm: 6,
+              md: 4,
+            }}
+          >
+            <ReadField label="Parent / Guardian" value={profile.parent?.name} />
           </Grid>
 
           <Grid
@@ -1475,12 +1407,7 @@ function StudentProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Father's Name"
-              value={
-                profile.fatherName
-              }
-            />
+            <ReadField label="Father's Name" value={profile.fatherName} />
           </Grid>
 
           <Grid
@@ -1490,12 +1417,7 @@ function StudentProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Mother's Name"
-              value={
-                profile.motherName
-              }
-            />
+            <ReadField label="Mother's Name" value={profile.motherName} />
           </Grid>
 
           <Grid
@@ -1507,11 +1429,7 @@ function StudentProfileView() {
           >
             <ReadField
               label="Emergency Contact"
-              value={
-                profile
-                  .emergencyContact
-                  ?.name
-              }
+              value={profile.emergencyContact?.name}
             />
           </Grid>
 
@@ -1524,11 +1442,7 @@ function StudentProfileView() {
           >
             <ReadField
               label="Emergency Phone"
-              value={
-                profile
-                  .emergencyContact
-                  ?.phone
-              }
+              value={profile.emergencyContact?.phone}
             />
           </Grid>
 
@@ -1539,12 +1453,7 @@ function StudentProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Category"
-              value={
-                profile.category
-              }
-            />
+            <ReadField label="Category" value={profile.category} />
           </Grid>
 
           <Grid
@@ -1554,12 +1463,7 @@ function StudentProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Religion"
-              value={
-                profile.religion
-              }
-            />
+            <ReadField label="Religion" value={profile.religion} />
           </Grid>
 
           <Grid
@@ -1569,24 +1473,86 @@ function StudentProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Aadhar Number"
-              value={
-                profile.aadharNumber
-              }
-            />
+            <ReadField label="Aadhar Number" value={profile.aadharNumber} />
           </Grid>
 
-          {profile.aadharCardUrl && (
+          {profile.medicalConditions && (
             <Grid size={{ xs: 12 }}>
-              <DocumentCard
-                url={
-                  profile.aadharCardUrl
-                }
-                title="Aadhar Card"
+              <ReadField
+                label="Medical Conditions"
+                value={profile.medicalConditions}
               />
             </Grid>
           )}
+        </Grid>
+      </SectionCard>
+
+      <SectionCard
+        icon={<DescriptionOutlinedIcon fontSize="small" />}
+        title="Documents"
+        subtitle="View or upload your documents"
+      >
+        <Grid container spacing={1.5}>
+          {profile.aadharFrontUrl && (
+            <Grid
+              size={{
+                xs: 12,
+                sm: 6,
+              }}
+            >
+              <DocumentCard
+                url={profile.aadharFrontUrl}
+                title="Aadhar Card — Front"
+              />
+            </Grid>
+          )}
+
+          {profile.aadharBackUrl && (
+            <Grid
+              size={{
+                xs: 12,
+                sm: 6,
+              }}
+            >
+              <DocumentCard
+                url={profile.aadharBackUrl}
+                title="Aadhar Card — Back"
+              />
+            </Grid>
+          )}
+
+          {profile.documents?.map((doc) => (
+            <Grid
+              size={{
+                xs: 12,
+                sm: 6,
+              }}
+              key={doc._id}
+            >
+              <DocumentCard
+                url={doc.url}
+                title={
+                  doc.type === "OTHER"
+                    ? doc.label || "Other Document"
+                    : doc.type.replace(/_/g, " ")
+                }
+              />
+            </Grid>
+          ))}
+
+          <Grid
+            size={{
+              xs: 12,
+              sm: 6,
+            }}
+          >
+            <DocumentUploader
+              title="Upload Document"
+              description="PDF, JPG or PNG up to 5MB"
+              onUpload={handleDocumentUpload}
+              isUploading={isUploadingDocument}
+            />
+          </Grid>
         </Grid>
       </SectionCard>
     </Box>
@@ -1594,55 +1560,107 @@ function StudentProfileView() {
 }
 
 // ======================================================
-// TEACHER
+// TEACHER FORM
 // ======================================================
 
 const TEACHER_EMPTY_FORM = {
   bio: "",
+  phone: "",
+  emergencyContact: {
+    name: "",
+    phone: "",
+    relation: "",
+  },
+  address: {
+    street: "",
+    city: "",
+    state: "",
+    pincode: "",
+  },
 };
 
+const createTeacherForm = (profile) => ({
+  bio: profile?.bio || "",
+  phone: profile?.phone || "",
+
+  emergencyContact: {
+    name: profile?.emergencyContact?.name || "",
+    phone: profile?.emergencyContact?.phone || "",
+    relation: profile?.emergencyContact?.relation || "",
+  },
+
+  address: {
+    street: profile?.address?.street || "",
+    city: profile?.address?.city || "",
+    state: profile?.address?.state || "",
+    pincode: profile?.address?.pincode || "",
+  },
+});
+
+const validateTeacherForm = (form) => {
+  const errors = {};
+
+  const phone = form.phone.trim();
+
+  const emergencyPhone = form.emergencyContact.phone.trim();
+
+  const pincode = form.address.pincode.trim();
+
+  const bio = form.bio.trim();
+
+  if (phone && !/^[6-9]\d{9}$/.test(phone)) {
+    errors.phone = "Enter a valid 10-digit mobile number.";
+  }
+
+  if (bio.length > 300) {
+    errors.bio = "Bio cannot be more than 300 characters.";
+  }
+
+  if (emergencyPhone && !/^[6-9]\d{9}$/.test(emergencyPhone)) {
+    errors.emergencyPhone = "Enter a valid 10-digit emergency phone number.";
+  }
+
+  if (pincode && !/^\d{6}$/.test(pincode)) {
+    errors.pincode = "Pincode must be exactly 6 digits.";
+  }
+
+  return errors;
+};
+
+// ======================================================
+// TEACHER
+// ======================================================
+
 function TeacherProfileView() {
-  const {
-    data: profile,
-    isLoading,
-    isError,
-  } = useMyTeacherProfile();
+  const { data: profile, isLoading, isError } = useMyTeacherProfile();
 
-  const {
-    mutate: updateProfile,
-    isPending,
-  } = useUpdateMyTeacherProfile();
+  const { mutate: updateProfile, isPending } = useUpdateMyTeacherProfile();
 
-  const {
-    mutate: uploadPhoto,
-    isPending: isUploadingPhoto,
-  } = useUploadMyTeacherProfilePhoto();
+  const { mutate: uploadPhoto, isPending: isUploadingPhoto } =
+    useUploadMyTeacherProfilePhoto();
 
-  const [editing, setEditing] =
-    useState(false);
+  const { mutate: uploadDocument, isPending: isUploadingDocument } =
+useUploadTeacherDocument()
 
-  const [form, setForm] = useState(
-    TEACHER_EMPTY_FORM
-  );
+  const [editing, setEditing] = useState(false);
 
-  const [formError, setFormError] =
-    useState("");
+  const [form, setForm] = useState(TEACHER_EMPTY_FORM);
+
+  const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
     if (!profile || editing) return;
 
-    setForm({
-      bio: profile.bio || "",
-    });
+    setForm(createTeacherForm(profile));
   }, [profile, editing]);
 
   const handleChange = (event) => {
-    const {
-      name,
-      value,
-    } = event.target;
+    const { name, value } = event.target;
 
-    setFormError("");
+    setFormErrors((previous) => ({
+      ...previous,
+      [name]: "",
+    }));
 
     setForm((previous) => ({
       ...previous,
@@ -1650,58 +1668,97 @@ function TeacherProfileView() {
     }));
   };
 
+  const handleNestedChange = (section, field, value) => {
+    setFormErrors((previous) => ({
+      ...previous,
+      [field]: "",
+      [`${section}.${field}`]: "",
+      ...(section === "emergencyContact" && field === "phone"
+        ? {
+            emergencyPhone: "",
+          }
+        : {}),
+      ...(section === "address" && field === "pincode"
+        ? {
+            pincode: "",
+          }
+        : {}),
+    }));
+
+    setForm((previous) => ({
+      ...previous,
+
+      [section]: {
+        ...previous[section],
+        [field]: value,
+      },
+    }));
+  };
+
   const handleEdit = () => {
     if (!profile) return;
 
-    setForm({
-      bio: profile.bio || "",
-    });
+    setForm(createTeacherForm(profile));
 
-    setFormError("");
+    setFormErrors({});
     setEditing(true);
   };
 
   const handleCancel = () => {
-    setForm({
-      bio: profile?.bio || "",
-    });
+    setForm(createTeacherForm(profile));
 
-    setFormError("");
+    setFormErrors({});
     setEditing(false);
   };
 
   const handlePhotoUpload = (file) => {
     const formData = new FormData();
-    // backend multer expects field name "file"
+
     formData.append("file", file);
 
     uploadPhoto(formData);
   };
 
+  const handleDocumentUpload = (formData) => {
+    uploadDocument(formData);
+  };
+
   const handleSave = () => {
     if (isPending) return;
 
-    const bio = form.bio.trim();
+    const errors = validateTeacherForm(form);
 
-    if (bio.length > 300) {
-      setFormError(
-        "Bio cannot be more than 300 characters."
-      );
+    setFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
       return;
     }
 
-    setFormError("");
+    const payload = {
+      phone: form.phone.trim(),
 
-    updateProfile(
-      {
-        bio,
+      bio: form.bio.trim(),
+
+      emergencyContact: {
+        name: form.emergencyContact.name.trim(),
+        phone: form.emergencyContact.phone.trim(),
+        relation: form.emergencyContact.relation.trim(),
       },
-      {
-        onSuccess: () => {
-          setEditing(false);
-        },
-      }
-    );
+
+      address: {
+        street: form.address.street.trim(),
+        city: form.address.city.trim(),
+        state: form.address.state.trim(),
+        pincode: form.address.pincode.trim(),
+      },
+    };
+
+    updateProfile(payload, {
+      onSuccess: () => {
+        setEditing(false);
+        setFormErrors({});
+      },
+    });
   };
 
   if (isLoading) {
@@ -1714,18 +1771,16 @@ function TeacherProfileView() {
 
   return (
     <Box>
-      <ProfileHeader
-        profile={profile}
-        type="teacher"
-      />
+      <ProfileHeader profile={profile} type="teacher" />
 
-      {/* EDITABLE DETAILS */}
+      {/* ==================================================
+          YOUR DETAILS
+      ================================================== */}
+
       <SectionCard
-        icon={
-          <EditOutlinedIcon fontSize="small" />
-        }
+        icon={<EditOutlinedIcon fontSize="small" />}
         title="Your Details"
-        subtitle="You can update these details yourself"
+        subtitle="You can update your personal contact details"
         action={
           <EditActions
             editing={editing}
@@ -1736,7 +1791,7 @@ function TeacherProfileView() {
           />
         }
       >
-        {formError && (
+        {Object.keys(formErrors).length > 0 && (
           <Alert
             severity="error"
             sx={{
@@ -1744,7 +1799,7 @@ function TeacherProfileView() {
               borderRadius: 2,
             }}
           >
-            {formError}
+            Please fix the highlighted fields.
           </Alert>
         )}
 
@@ -1758,6 +1813,32 @@ function TeacherProfileView() {
         <Box sx={{ mt: 2.5 }}>
           {editing ? (
             <Grid container spacing={2}>
+              {/* PHONE */}
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 6,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Phone"
+                  name="phone"
+                  value={form.phone}
+                  onChange={handleChange}
+                  error={Boolean(formErrors.phone)}
+                  helperText={formErrors.phone || "10-digit mobile number"}
+                  inputProps={{
+                    maxLength: 10,
+                    inputMode: "numeric",
+                  }}
+                />
+              </Grid>
+
+              {/* BIO */}
+
               <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
@@ -1765,24 +1846,268 @@ function TeacherProfileView() {
                   label="Bio"
                   name="bio"
                   value={form.bio}
-                  onChange={
-                    handleChange
-                  }
+                  onChange={handleChange}
+                  error={Boolean(formErrors.bio)}
+                  helperText={formErrors.bio || `${form.bio.length}/300`}
                   multiline
                   minRows={3}
                   inputProps={{
                     maxLength: 300,
                   }}
-                  helperText={`${form.bio.length}/300`}
+                />
+              </Grid>
+
+              {/* EMERGENCY TITLE */}
+
+              <Grid size={{ xs: 12 }}>
+                <Typography
+                  sx={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: "#374151",
+                    mb: 1,
+                  }}
+                >
+                  Emergency Contact
+                </Typography>
+              </Grid>
+
+              {/* EMERGENCY NAME */}
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 4,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Name"
+                  value={form.emergencyContact.name}
+                  onChange={(event) =>
+                    handleNestedChange(
+                      "emergencyContact",
+                      "name",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Grid>
+
+              {/* EMERGENCY PHONE */}
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 4,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Phone"
+                  value={form.emergencyContact.phone}
+                  onChange={(event) =>
+                    handleNestedChange(
+                      "emergencyContact",
+                      "phone",
+                      event.target.value,
+                    )
+                  }
+                  error={Boolean(formErrors.emergencyPhone)}
+                  helperText={formErrors.emergencyPhone}
+                  inputProps={{
+                    maxLength: 10,
+                    inputMode: "numeric",
+                  }}
+                />
+              </Grid>
+
+              {/* RELATION */}
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 4,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Relation"
+                  value={form.emergencyContact.relation}
+                  onChange={(event) =>
+                    handleNestedChange(
+                      "emergencyContact",
+                      "relation",
+                      event.target.value,
+                    )
+                  }
+                />
+              </Grid>
+
+              {/* ADDRESS TITLE */}
+
+              <Grid size={{ xs: 12 }}>
+                <Typography
+                  sx={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: "#374151",
+                    mb: 1,
+                  }}
+                >
+                  Address
+                </Typography>
+              </Grid>
+
+              {/* STREET */}
+
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Street / Address"
+                  value={form.address.street}
+                  onChange={(event) =>
+                    handleNestedChange("address", "street", event.target.value)
+                  }
+                />
+              </Grid>
+
+              {/* CITY */}
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 4,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="City"
+                  value={form.address.city}
+                  onChange={(event) =>
+                    handleNestedChange("address", "city", event.target.value)
+                  }
+                />
+              </Grid>
+
+              {/* STATE */}
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 4,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="State"
+                  value={form.address.state}
+                  onChange={(event) =>
+                    handleNestedChange("address", "state", event.target.value)
+                  }
+                />
+              </Grid>
+
+              {/* PINCODE */}
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 4,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Pincode"
+                  value={form.address.pincode}
+                  onChange={(event) =>
+                    handleNestedChange("address", "pincode", event.target.value)
+                  }
+                  error={Boolean(formErrors.pincode)}
+                  helperText={formErrors.pincode}
+                  inputProps={{
+                    maxLength: 6,
+                    inputMode: "numeric",
+                  }}
                 />
               </Grid>
             </Grid>
           ) : (
             <Grid container spacing={2}>
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 6,
+                  md: 4,
+                }}
+              >
+                <ReadField
+                  label="Phone"
+                  value={profile.phone}
+                  icon={<PhoneOutlinedIcon sx={{ fontSize: 15 }} />}
+                />
+              </Grid>
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 6,
+                  md: 4,
+                }}
+              >
+                <ReadField
+                  label="City"
+                  value={profile.address?.city}
+                  icon={<LocationOnOutlinedIcon sx={{ fontSize: 15 }} />}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <ReadField label="Bio" value={profile.bio} />
+              </Grid>
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 6,
+                }}
+              >
+                <ReadField
+                  label="Emergency Contact"
+                  value={profile.emergencyContact?.name}
+                />
+              </Grid>
+
+              <Grid
+                size={{
+                  xs: 12,
+                  sm: 6,
+                }}
+              >
+                <ReadField
+                  label="Emergency Phone"
+                  value={profile.emergencyContact?.phone}
+                />
+              </Grid>
+
               <Grid size={{ xs: 12 }}>
                 <ReadField
-                  label="Bio"
-                  value={profile.bio}
+                  label="Address"
+                  value={[
+                    profile.address?.street,
+                    profile.address?.city,
+                    profile.address?.state,
+                    profile.address?.pincode,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
                 />
               </Grid>
             </Grid>
@@ -1790,11 +2115,12 @@ function TeacherProfileView() {
         </Box>
       </SectionCard>
 
-      {/* OFFICIAL DETAILS */}
+      {/* ==================================================
+          OFFICIAL DETAILS
+      ================================================== */}
+
       <SectionCard
-        icon={
-          <LockOutlinedIcon fontSize="small" />
-        }
+        icon={<LockOutlinedIcon fontSize="small" />}
         title="Official Details"
         subtitle="These details are managed by the school admin"
       >
@@ -1807,53 +2133,9 @@ function TeacherProfileView() {
             }}
           >
             <ReadField
-              label="Phone"
-              value={profile.phone}
-              icon={
-                <PhoneOutlinedIcon
-                  sx={{ fontSize: 15 }}
-                />
-              }
-            />
-          </Grid>
-
-          <Grid
-            size={{
-              xs: 12,
-              sm: 6,
-              md: 4,
-            }}
-          >
-            <ReadField
-              label="City"
-              value={
-                profile.address?.city
-              }
-              icon={
-                <LocationOnOutlinedIcon
-                  sx={{ fontSize: 15 }}
-                />
-              }
-            />
-          </Grid>
-
-          <Grid
-            size={{
-              xs: 12,
-              sm: 6,
-              md: 4,
-            }}
-          >
-            <ReadField
               label="Employee ID"
-              value={
-                profile.employeeId
-              }
-              icon={
-                <BadgeOutlinedIcon
-                  sx={{ fontSize: 15 }}
-                />
-              }
+              value={profile.employeeId}
+              icon={<BadgeOutlinedIcon sx={{ fontSize: 15 }} />}
             />
           </Grid>
 
@@ -1866,14 +2148,8 @@ function TeacherProfileView() {
           >
             <ReadField
               label="Joining Date"
-              value={formatDate(
-                profile.joiningDate
-              )}
-              icon={
-                <CalendarMonthOutlinedIcon
-                  sx={{ fontSize: 15 }}
-                />
-              }
+              value={formatDate(profile.joiningDate)}
+              icon={<CalendarMonthOutlinedIcon sx={{ fontSize: 15 }} />}
             />
           </Grid>
 
@@ -1887,9 +2163,7 @@ function TeacherProfileView() {
             <ReadField
               label="Experience"
               value={
-                profile.experienceYears
-                  ? `${profile.experienceYears} yrs`
-                  : ""
+                profile.experienceYears ? `${profile.experienceYears} yrs` : ""
               }
             />
           </Grid>
@@ -1901,12 +2175,27 @@ function TeacherProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Qualification"
-              value={
-                profile.qualification
-              }
-            />
+            <ReadField label="Qualification" value={profile.qualification} />
+          </Grid>
+
+          <Grid
+            size={{
+              xs: 12,
+              sm: 6,
+              md: 4,
+            }}
+          >
+            <ReadField label="Specialization" value={profile.specialization} />
+          </Grid>
+
+          <Grid
+            size={{
+              xs: 12,
+              sm: 6,
+              md: 4,
+            }}
+          >
+            <ReadField label="Employment Type" value={profile.employmentType} />
           </Grid>
 
           <Grid
@@ -1919,11 +2208,7 @@ function TeacherProfileView() {
             <ReadField
               label="Subjects"
               value={
-                profile.subjects?.length
-                  ? profile.subjects.join(
-                      ", "
-                    )
-                  : ""
+                profile.subjects?.length ? profile.subjects.join(", ") : ""
               }
             />
           </Grid>
@@ -1935,14 +2220,37 @@ function TeacherProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Emergency Contact"
-              value={
-                profile
-                  .emergencyContact
-                  ?.name
-              }
-            />
+            <ReadField label="Category" value={profile.category} />
+          </Grid>
+
+          <Grid
+            size={{
+              xs: 12,
+              sm: 6,
+              md: 4,
+            }}
+          >
+            <ReadField label="Religion" value={profile.religion} />
+          </Grid>
+
+          <Grid
+            size={{
+              xs: 12,
+              sm: 6,
+              md: 4,
+            }}
+          >
+            <ReadField label="Aadhar Number" value={profile.aadharNumber} />
+          </Grid>
+
+          <Grid
+            size={{
+              xs: 12,
+              sm: 6,
+              md: 4,
+            }}
+          >
+            <ReadField label="PAN Number" value={profile.panNumber} />
           </Grid>
 
           <Grid
@@ -1953,12 +2261,8 @@ function TeacherProfileView() {
             }}
           >
             <ReadField
-              label="Emergency Phone"
-              value={
-                profile
-                  .emergencyContact
-                  ?.phone
-              }
+              label="Date of Birth"
+              value={formatDate(profile.dateOfBirth)}
             />
           </Grid>
 
@@ -1969,12 +2273,7 @@ function TeacherProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Category"
-              value={
-                profile.category
-              }
-            />
+            <ReadField label="Gender" value={profile.gender} />
           </Grid>
 
           <Grid
@@ -1984,12 +2283,7 @@ function TeacherProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Religion"
-              value={
-                profile.religion
-              }
-            />
+            <ReadField label="Blood Group" value={profile.bloodGroup} />
           </Grid>
 
           <Grid
@@ -1999,24 +2293,58 @@ function TeacherProfileView() {
               md: 4,
             }}
           >
-            <ReadField
-              label="Aadhar Number"
-              value={
-                profile.aadharNumber
-              }
-            />
+            <ReadField label="Marital Status" value={profile.maritalStatus} />
           </Grid>
+        </Grid>
+      </SectionCard>
 
+      {/* ==================================================
+          TEACHER DOCUMENTS
+      ================================================== */}
+
+      <SectionCard
+        icon={<DescriptionOutlinedIcon fontSize="small" />}
+        title="Documents"
+        subtitle="View existing documents or upload a new document"
+      >
+        <Grid container spacing={1.5}>
           {profile.aadharCardUrl && (
-            <Grid size={{ xs: 12 }}>
-              <DocumentCard
-                url={
-                  profile.aadharCardUrl
-                }
-                title="Aadhar Card"
-              />
+            <Grid
+              size={{
+                xs: 12,
+                md: 6,
+              }}
+            >
+              <DocumentCard url={profile.aadharCardUrl} title="Aadhar Card" />
             </Grid>
           )}
+{Array.isArray(profile.documents) &&
+  profile.documents.map((doc) => (
+    <Grid size={{ xs: 12, sm: 6 }} key={doc._id || doc.id || doc.url}>
+      <DocumentCard
+        url={doc.url}
+        title={
+          doc.type === "OTHER"
+            ? doc.label || "Other Document"
+            : String(doc.type || "Document").replace(/_/g, " ")
+        }
+      />
+    </Grid>
+  ))}
+
+          <Grid
+            size={{
+              xs: 12,
+              md: 6,
+            }}
+          >
+            <DocumentUploader
+              title="Upload Document"
+              description="PDF, JPG or PNG up to 5MB"
+              onUpload={handleDocumentUpload}
+              isUploading={isUploadingDocument}
+            />
+          </Grid>
         </Grid>
       </SectionCard>
     </Box>
@@ -2033,12 +2361,9 @@ function ProfileLoading() {
       sx={{
         display: "flex",
         flexDirection: "column",
-
         justifyContent: "center",
         alignItems: "center",
-
         py: 10,
-
         gap: 1.5,
       }}
     >
@@ -2068,8 +2393,7 @@ function ProfileError() {
         borderRadius: 2.5,
       }}
     >
-      Unable to load your profile.
-      Please try again later.
+      Unable to load your profile. Please try again later.
     </Alert>
   );
 }
@@ -2079,10 +2403,7 @@ function ProfileError() {
 // ======================================================
 
 export default function ProfilePage() {
-  const {
-    user,
-    isLoading: authLoading,
-  } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
 
   if (authLoading) {
     return (
@@ -2090,7 +2411,6 @@ export default function ProfilePage() {
         sx={{
           minHeight: "100vh",
           backgroundColor: "#f8fafc",
-
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
@@ -2107,65 +2427,47 @@ export default function ProfilePage() {
     <Box
       sx={{
         minHeight: "100vh",
-
         backgroundColor: "#f8fafc",
-
         p: {
           xs: 1.25,
           sm: 2.5,
           md: 3,
           lg: 4,
         },
-
         overflowX: "hidden",
       }}
     >
       {/* PAGE HEADER */}
+
       <Box
         sx={{
           width: "100%",
           maxWidth: 1100,
-
           mx: "auto",
-
           mb: {
             xs: 2,
             md: 3,
           },
         }}
       >
-        <Stack
-          direction="row"
-          spacing={1.25}
-          alignItems="center"
-        >
+        <Stack direction="row" spacing={1.25} alignItems="center">
           <Box
             sx={{
               width: 40,
               height: 40,
-
               borderRadius: 2,
-
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-
-              backgroundColor:
-                "#eef2ff",
-
+              backgroundColor: "#eef2ff",
               color: "#3150fd",
-
               flexShrink: 0,
             }}
           >
             <PersonOutlineOutlinedIcon />
           </Box>
 
-          <Box
-            sx={{
-              minWidth: 0,
-            }}
-          >
+          <Box sx={{ minWidth: 0 }}>
             <Typography
               sx={{
                 fontSize: {
@@ -2173,11 +2475,8 @@ export default function ProfilePage() {
                   sm: 25,
                   md: 28,
                 },
-
                 fontWeight: 750,
-
                 color: "#111827",
-
                 lineHeight: 1.2,
               }}
             >
@@ -2187,23 +2486,21 @@ export default function ProfilePage() {
             <Typography
               sx={{
                 mt: 0.5,
-
                 fontSize: {
                   xs: 12.5,
                   sm: 14,
                 },
-
                 color: "#6b7280",
               }}
             >
-              View and update your
-              profile details.
+              View and update your profile details.
             </Typography>
           </Box>
         </Stack>
       </Box>
 
       {/* CONTENT */}
+
       <Box
         sx={{
           width: "100%",
@@ -2211,17 +2508,11 @@ export default function ProfilePage() {
           mx: "auto",
         }}
       >
-        {role === "STUDENT" && (
-          <StudentProfileView />
-        )}
+        {role === "STUDENT" && <StudentProfileView />}
 
-        {role === "TEACHER" && (
-          <TeacherProfileView />
-        )}
+        {role === "TEACHER" && <TeacherProfileView />}
 
-        {!["STUDENT", "TEACHER"].includes(
-          role
-        ) && (
+        {!["STUDENT", "TEACHER"].includes(role) && (
           <Paper
             elevation={0}
             sx={{
@@ -2229,14 +2520,9 @@ export default function ProfilePage() {
                 xs: 2,
                 sm: 3,
               },
-
               borderRadius: 3,
-
-              border:
-                "1px solid #e5e7eb",
-
-              backgroundColor:
-                "#ffffff",
+              border: "1px solid #e5e7eb",
+              backgroundColor: "#fff",
             }}
           >
             <Stack
@@ -2253,37 +2539,26 @@ export default function ProfilePage() {
               <Avatar
                 sx={{
                   bgcolor: "#3150fd",
-
                   width: {
                     xs: 60,
                     sm: 68,
                   },
-
                   height: {
                     xs: 60,
                     sm: 68,
                   },
-
                   fontWeight: 700,
                 }}
               >
-                {getInitials(
-                  user?.name
-                )}
+                {getInitials(user?.name)}
               </Avatar>
 
-              <Box
-                sx={{
-                  minWidth: 0,
-                }}
-              >
+              <Box sx={{ minWidth: 0 }}>
                 <Typography
                   sx={{
                     fontWeight: 700,
                     fontSize: 17,
-
-                    wordBreak:
-                      "break-word",
+                    wordBreak: "break-word",
                   }}
                 >
                   {user?.name || "User"}
@@ -2294,28 +2569,19 @@ export default function ProfilePage() {
                     fontSize: 13,
                     color: "#6b7280",
                     mt: 0.25,
-
-                    wordBreak:
-                      "break-word",
+                    wordBreak: "break-word",
                   }}
                 >
-                  {user?.email ||
-                    "No email available"}
+                  {user?.email || "No email available"}
                 </Typography>
 
                 <Chip
-                  icon={
-                    <SchoolOutlinedIcon fontSize="small" />
-                  }
+                  icon={<SchoolOutlinedIcon fontSize="small" />}
                   size="small"
-                  label={
-                    user?.role || "USER"
-                  }
+                  label={user?.role || "USER"}
                   sx={{
                     mt: 1,
-
                     height: 28,
-
                     fontWeight: 600,
                   }}
                 />

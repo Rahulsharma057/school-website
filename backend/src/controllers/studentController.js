@@ -1,36 +1,56 @@
 const mongoose = require("mongoose");
+
 const User = require("../models/User");
 const StudentProfile = require("../models/StudentProfile");
+
 const generateRollNumber = require("../utils/generateRollNumber");
 const { hashPassword } = require("../services/authService");
 const asyncHandler = require("../helpers/asyncHandler");
 const ApiResponse = require("../helpers/ApiResponse");
-const documentUpload = require("../middlewares/documentUpload");
-const uploadToCloudinary = require("../utils/uploadToCloudinary"); // ← existing helper, default export
-// Nested-object fields jinke andar sirf specific keys allow karni hain
-// (taaki koi extra/unwanted key body se slip na kare)
+const uploadToCloudinary = require("../utils/uploadToCloudinary");
+const {
+  streamStudentProfilePdf,
+} = require("../utils/generateStudentProfilePdf");
+
+// ======================================================
+// NESTED FIELDS
+// ======================================================
+
 const NESTED_FIELD_KEYS = {
   emergencyContact: ["name", "phone", "relation"],
   address: ["street", "city", "state", "pincode"],
 };
 
-// body se sirf `allowedFields` list wale keys nikaal ke ek clean $set object banata hai.
-// Nested objects (emergencyContact, address) ke liye sirf whitelisted sub-keys allow karta hai.
-function pickAllowedUpdates(body, allowedFields) {
+// ======================================================
+// SAFE UPDATE PICKER
+// IMPORTANT:
+// Nested objects are converted to dot notation so existing
+// fields do not get accidentally deleted.
+// ======================================================
+
+function pickAllowedUpdates(body = {}, allowedFields = []) {
   const updates = {};
 
   for (const field of allowedFields) {
-    if (!(field in body)) continue;
+    if (!Object.prototype.hasOwnProperty.call(body, field)) {
+      continue;
+    }
 
     if (NESTED_FIELD_KEYS[field]) {
       const incoming = body[field];
-      if (incoming && typeof incoming === "object" && !Array.isArray(incoming)) {
-        const cleanNested = {};
+
+      if (
+        incoming &&
+        typeof incoming === "object" &&
+        !Array.isArray(incoming)
+      ) {
         for (const key of NESTED_FIELD_KEYS[field]) {
-          if (key in incoming) cleanNested[key] = incoming[key];
+          if (Object.prototype.hasOwnProperty.call(incoming, key)) {
+            updates[`${field}.${key}`] = incoming[key];
+          }
         }
-        updates[field] = cleanNested;
       }
+
       continue;
     }
 
@@ -40,18 +60,29 @@ function pickAllowedUpdates(body, allowedFields) {
   return updates;
 }
 
-// ================= CREATE STUDENT =================
-// Sirf PRINCIPAL / ADMIN / SUPER_ADMIN access karenge (route me lagayenge)
-//
-// Parent linking — two ways, both optional:
-//   1. Pass an existing `parentId` (old behaviour, unchanged). If
-//      `parentPhone` is also given, we backfill it onto that parent —
-//      handy for updating an old parent record that never had a phone.
-//   2. Pass `parentName` + `parentEmail` (+ optional `parentPassword`,
-//      `parentPhone`) and a brand-new User with role PARENT is created in
-//      the same transaction and linked. This is what actually lets phone
-//      numbers get into the system for the fee-reminder SMS feature,
-//      since there was previously no "create parent" endpoint at all.
+// ======================================================
+// COMMON POPULATE
+// ======================================================
+
+const PROFILE_POPULATE = [
+  {
+    path: "class",
+    select: "className section",
+  },
+  {
+    path: "user",
+    select: "name email role isActive createdAt",
+  },
+  {
+    path: "parent",
+    select: "name email phone",
+  },
+];
+
+// ======================================================
+// CREATE STUDENT
+// ======================================================
+
 exports.createStudent = asyncHandler(async (req, res) => {
   const {
     name,
@@ -60,42 +91,72 @@ exports.createStudent = asyncHandler(async (req, res) => {
     classId,
     address,
     dateOfBirth,
+
     parentId,
     parentName,
     parentEmail,
     parentPassword,
     parentPhone,
-    // Admin-set-at-creation extras (optional, all admin-only fields anyway)
+
     admissionNumber,
     admissionDate,
     previousSchool,
     house,
   } = req.body;
 
+  if (!name || !email || !password || !classId) {
+    return res.status(400).json(
+      new ApiResponse(400, null, "name, email, password and classId are required"),
+    );
+  }
+
+  // FIX: classId must be a real ObjectId, otherwise the later
+  // StudentProfile.create() throws a raw CastError instead of a clean 400.
+  if (!mongoose.Types.ObjectId.isValid(classId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid class ID"));
+  }
+
+  // FIX: if an existing parentId is passed, it must actually exist and be
+  // a PARENT user. Previously this was never checked, so a typo'd or
+  // wrong-role ID would silently get saved as the student's parent ref.
+  if (parentId) {
+    if (!mongoose.Types.ObjectId.isValid(parentId)) {
+      return res.status(400).json(new ApiResponse(400, null, "Invalid parent ID"));
+    }
+  }
+
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
-    // duplicate email check (student)
-    const existingUser = await User.findOne({ email }).session(session);
+    session.startTransaction();
+
+    // ==================================================
+    // CHECK STUDENT USER
+    // ==================================================
+
+    const existingUser = await User.findOne({
+      email: email.trim().toLowerCase(),
+    }).session(session);
+
     if (existingUser) {
       await session.abortTransaction();
-      return res
-        .status(400)
-        .json(new ApiResponse(400, null, "Email already registered"));
+      return res.status(400).json(new ApiResponse(400, null, "Email already registered"));
     }
+
+    // ==================================================
+    // CREATE STUDENT USER
+    // ==================================================
 
     const hashedPassword = await hashPassword(password);
 
-    // Step A: Student User create
     const newUser = await User.create(
       [
         {
-          name,
-          email,
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
           password: hashedPassword,
           role: "STUDENT",
-          createdBy: req.user._id, // kisne banaya (Principal/Admin)
+          createdBy: req.user._id,
         },
       ],
       { session },
@@ -103,24 +164,43 @@ exports.createStudent = asyncHandler(async (req, res) => {
 
     const createdUser = newUser[0];
 
-    // Step B: Resolve the parent — create new, link existing, or none.
-    let resolvedParentId = parentId || null;
+    // ==================================================
+    // PARENT
+    // ==================================================
 
-    if (!parentId && parentName && parentEmail) {
-      const existingParent = await User.findOne({ email: parentEmail }).session(
-        session,
-      );
+    let resolvedParentId = null;
+
+    if (parentId) {
+      // FIX: validate the parent actually exists and has role PARENT
+      const existingParentUser = await User.findOne({
+        _id: parentId,
+        role: "PARENT",
+      }).session(session);
+
+      if (!existingParentUser) {
+        await session.abortTransaction();
+        return res.status(400).json(
+          new ApiResponse(400, null, "Parent not found with the given parentId"),
+        );
+      }
+
+      resolvedParentId = existingParentUser._id;
+    } else if (parentName && parentEmail) {
+      const normalizedParentEmail = parentEmail.trim().toLowerCase();
+
+      const existingParent = await User.findOne({
+        email: normalizedParentEmail,
+      }).session(session);
+
       if (existingParent) {
         await session.abortTransaction();
-        return res
-          .status(400)
-          .json(
-            new ApiResponse(
-              400,
-              null,
-              "A user with this parent email already exists — link them via parentId instead",
-            ),
-          );
+        return res.status(400).json(
+          new ApiResponse(
+            400,
+            null,
+            "A user with this parent email already exists. Please select the existing parent.",
+          ),
+        );
       }
 
       const parentHashedPassword = await hashPassword(
@@ -130,9 +210,9 @@ exports.createStudent = asyncHandler(async (req, res) => {
       const newParent = await User.create(
         [
           {
-            name: parentName,
-            email: parentEmail,
-            phone: parentPhone || null,
+            name: parentName.trim(),
+            email: normalizedParentEmail,
+            phone: parentPhone || "",
             password: parentHashedPassword,
             role: "PARENT",
             createdBy: req.user._id,
@@ -142,27 +222,41 @@ exports.createStudent = asyncHandler(async (req, res) => {
       );
 
       resolvedParentId = newParent[0]._id;
-    } else if (parentId && parentPhone) {
-      // Existing parent, but we were given a phone — backfill it.
-      await User.updateOne(
-        { _id: parentId },
-        { $set: { phone: parentPhone } },
-      ).session(session);
     }
 
-    // Step C: Roll number generate
+    // ==================================================
+    // EXISTING PARENT PHONE UPDATE
+    // ==================================================
+
+    if (parentId && parentPhone && resolvedParentId) {
+      await User.updateOne(
+        { _id: resolvedParentId, role: "PARENT" },
+        { $set: { phone: parentPhone } },
+        { session },
+      );
+    }
+
+    // ==================================================
+    // GENERATE ROLL NUMBER
+    // ==================================================
+
     const rollNumber = await generateRollNumber(classId);
 
-    // Step D: StudentProfile create
+    // ==================================================
+    // CREATE STUDENT PROFILE
+    // ==================================================
+
     const newProfile = await StudentProfile.create(
       [
         {
           user: createdUser._id,
           class: classId,
           rollNumber,
-          address,
-          dateOfBirth,
+
+          address: address || {},
+          dateOfBirth: dateOfBirth || null,
           parent: resolvedParentId,
+
           admissionNumber: admissionNumber || "",
           admissionDate: admissionDate || null,
           previousSchool: previousSchool || "",
@@ -173,190 +267,589 @@ exports.createStudent = asyncHandler(async (req, res) => {
     );
 
     await session.commitTransaction();
-    session.endSession();
 
-    res.status(201).json(
+    return res.status(201).json(
       new ApiResponse(
         201,
-        {
-          user: createdUser,
-          profile: newProfile[0],
-        },
+        { user: createdUser, profile: newProfile[0] },
         "Student created successfully",
       ),
     );
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    throw error; // asyncHandler pakad lega
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
+    // FIX: duplicate roll number / duplicate class+roll can also happen here
+    if (error?.code === 11000) {
+      return res.status(409).json(
+        new ApiResponse(409, null, "This roll number is already assigned in this class"),
+      );
+    }
+
+    throw error;
+  } finally {
+    await session.endSession();
   }
 });
 
-// ================= STUDENT SELF PROFILE (VIEW) =================
-// Sirf STUDENT role access karega (route me allowRoles("STUDENT") lagega)
+// ======================================================
+// GET MY PROFILE
+// ======================================================
 
 exports.getMyProfile = asyncHandler(async (req, res) => {
-  const profile = await StudentProfile.findOne({ user: req.user._id })
-    .populate("class", "className section")
-    .populate("user", "name email role")
-    .populate("parent", "name email phone");
+  const profile = await StudentProfile.findOne({
+    user: req.user._id,
+  }).populate(PROFILE_POPULATE);
 
   if (!profile) {
-    return res
-      .status(404)
-      .json(new ApiResponse(404, null, "Student profile not found"));
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
   }
 
-  res.json(
-    new ApiResponse(200, profile, "Student profile fetched successfully"),
-  );
+  return res.json(new ApiResponse(200, profile, "Student profile fetched successfully"));
 });
 
-// ================= STUDENT SELF PROFILE (UPDATE) =================
-// Sirf STUDENT role — sirf apni profile, sirf SELF_EDITABLE_FIELDS.
-// Koi admin-only field (class, rollNumber, status, admissionNumber, ...)
-// is route se change nahi ho sakti, chahe body me bhej bhi de.
+// ======================================================
+// UPDATE MY PROFILE
+// ======================================================
 
 exports.updateMyProfile = asyncHandler(async (req, res) => {
-  const updates = pickAllowedUpdates(
-    req.body,
-    StudentProfile.SELF_EDITABLE_FIELDS,
-  );
+  const updates = pickAllowedUpdates(req.body, StudentProfile.SELF_EDITABLE_FIELDS);
 
   if (Object.keys(updates).length === 0) {
-    return res
-      .status(400)
-      .json(new ApiResponse(400, null, "No editable fields provided"));
+    return res.status(400).json(new ApiResponse(400, null, "No editable fields provided"));
   }
 
   const profile = await StudentProfile.findOneAndUpdate(
     { user: req.user._id },
     { $set: updates },
     { new: true, runValidators: true },
-  )
-    .populate("class", "className section")
-    .populate("user", "name email role")
-    .populate("parent", "name email phone");
+  ).populate(PROFILE_POPULATE);
 
   if (!profile) {
-    return res
-      .status(404)
-      .json(new ApiResponse(404, null, "Student profile not found"));
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
   }
 
-  res.json(new ApiResponse(200, profile, "Profile updated successfully"));
+  return res.json(new ApiResponse(200, profile, "Profile updated successfully"));
 });
 
-// ================= UPDATE STUDENT — ADMIN/PRINCIPAL =================
-// Access: SUPER_ADMIN, ADMIN, PRINCIPAL
-// Yeh admin-only fields ke liye hai (class, rollNumber, status, admissionNumber,
-// admissionDate, previousSchool, house, dateOfBirth, leftReason, leftDate, parent).
-// Agar rollNumber ya class change ho rahi hai to duplicate-index error
-// (class+rollNumber unique) automatically Mongo se aayega — asyncHandler pakdega.
+// ======================================================
+// UPDATE STUDENT BY ADMIN
+// ======================================================
 
 exports.updateStudentByAdmin = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
 
+  if (!mongoose.Types.ObjectId.isValid(studentId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid student ID"));
+  }
+
   const updates = pickAllowedUpdates(req.body, StudentProfile.ADMIN_ONLY_FIELDS);
 
   if (Object.keys(updates).length === 0) {
-    return res
-      .status(400)
-      .json(new ApiResponse(400, null, "No admin-editable fields provided"));
+    return res.status(400).json(new ApiResponse(400, null, "No admin-editable fields provided"));
   }
 
-  const profile = await StudentProfile.findByIdAndUpdate(
-    studentId,
-    { $set: updates },
-    { new: true, runValidators: true },
-  )
-    .populate("class", "className section")
-    .populate("user", "name email role")
-    .populate("parent", "name email phone");
-
-  if (!profile) {
-    return res
-      .status(404)
-      .json(new ApiResponse(404, null, "Student profile not found"));
+  // FIX: if `parent` is being reassigned here, validate it exists and is a PARENT
+  // (same rule createStudent enforces — previously this route had no such check).
+  if (Object.prototype.hasOwnProperty.call(updates, "parent") && updates.parent) {
+    if (!mongoose.Types.ObjectId.isValid(updates.parent)) {
+      return res.status(400).json(new ApiResponse(400, null, "Invalid parent ID"));
+    }
+    const parentUser = await User.findOne({ _id: updates.parent, role: "PARENT" });
+    if (!parentUser) {
+      return res.status(400).json(new ApiResponse(400, null, "Parent not found with the given ID"));
+    }
   }
 
-  res.json(new ApiResponse(200, profile, "Student updated successfully"));
+  // ==================================================
+  // STATUS CONSISTENCY
+  // ==================================================
+
+  if (updates.status === "ACTIVE") {
+    updates.leftDate = null;
+    updates.leftReason = "";
+  }
+
+  if (updates.status === "LEFT" && !updates.leftDate) {
+    updates.leftDate = new Date();
+  }
+
+  // ==================================================
+  // UPDATE
+  // FIX: wrapped in a transaction so the profile update and the linked
+  // User.isActive toggle either both happen or neither does. Previously,
+  // changing `status` here (e.g. PATCH /:studentId { status: "LEFT" })
+  // updated the profile but left the student's login (User.isActive)
+  // untouched — only the separate mark-left endpoint did that, so the
+  // two "leave a student" code paths disagreed with each other.
+  // ==================================================
+
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const profile = await StudentProfile.findByIdAndUpdate(
+      studentId,
+      { $set: updates },
+      { new: true, runValidators: true, session },
+    );
+
+    if (!profile) {
+      await session.abortTransaction();
+      return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+    }
+
+    if (updates.status === "LEFT") {
+      await User.findByIdAndUpdate(profile.user, { isActive: false }, { session });
+    } else if (updates.status === "ACTIVE") {
+      await User.findByIdAndUpdate(profile.user, { isActive: true }, { session });
+    }
+
+    await session.commitTransaction();
+
+    const populated = await StudentProfile.findById(profile._id).populate(PROFILE_POPULATE);
+
+    return res.json(new ApiResponse(200, populated, "Student updated successfully"));
+  } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
+    if (error?.code === 11000) {
+      return res.status(409).json(
+        new ApiResponse(409, null, "This roll number is already assigned in this class"),
+      );
+    }
+
+    throw error;
+  } finally {
+    await session.endSession();
+  }
 });
 
-// ================= GET STUDENTS BY CLASS =================
-// Access: TEACHER, SUPER_ADMIN, ADMIN, PRINCIPAL
+// ======================================================
+// GET ALL STUDENTS (admin, paginated + search + filters)
+// FIX: the frontend studentService already called GET "/students" with
+// page/limit/search/classId/status params, but no route or controller
+// for it existed on the backend — every call would have 404'd. Added here.
+// ======================================================
+
+exports.getAllStudents = asyncHandler(async (req, res) => {
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+  const { search = "", classId = "", status = "" } = req.query;
+
+  const filter = {};
+
+  if (classId) {
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json(new ApiResponse(400, null, "Invalid class ID"));
+    }
+    filter.class = classId;
+  }
+
+  if (status) {
+    filter.status = status;
+  }
+
+  if (search && search.trim()) {
+    // Escape regex special characters so a search term like "a.b" or "(x)"
+    // can't break the query or be (ab)used as a regex-injection.
+    const term = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(term, "i");
+
+    const matchingUsers = await User.find({
+      role: "STUDENT",
+      $or: [{ name: regex }, { email: regex }],
+    }).select("_id");
+
+    filter.$or = [
+      { rollNumber: regex },
+      { user: { $in: matchingUsers.map((u) => u._id) } },
+    ];
+  }
+
+  const [students, total] = await Promise.all([
+    StudentProfile.find(filter)
+      .populate("user", "name email role isActive")
+      .populate("parent", "name email phone")
+      .populate("class", "className section")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    StudentProfile.countDocuments(filter),
+  ]);
+
+  return res.json(
+    new ApiResponse(
+      200,
+      {
+        students,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit) || 0,
+        },
+      },
+      "Students fetched successfully",
+    ),
+  );
+});
+
+// ======================================================
+// GET STUDENTS BY CLASS
+// ======================================================
 
 exports.getStudentsByClass = asyncHandler(async (req, res) => {
   const { classId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(classId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid class ID"));
+  }
 
   const students = await StudentProfile.find({
     class: classId,
     status: "ACTIVE",
   })
-    .populate("user", "name email")
+    .populate("user", "name email role isActive")
+    .populate("parent", "name email phone")
+    .populate("class", "className section")
     .sort({ rollNumber: 1 });
 
-  res.json(new ApiResponse(200, students, "Students fetched successfully"));
+  return res.json(new ApiResponse(200, students, "Students fetched successfully"));
 });
 
-// ================= UPLOAD AADHAR CARD (Student) =================
-// Access: SUPER_ADMIN, ADMIN, PRINCIPAL only
-// multipart/form-data: file (jpg/png/webp/pdf)
+// ======================================================
+// GET STUDENT BY ID
+// ======================================================
 
-exports.uploadStudentAadhar = asyncHandler(async (req, res) => {
+exports.getStudentById = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
 
-  if (!req.file) {
-    return res.status(400).json(new ApiResponse(400, null, "No file uploaded"));
+  if (!mongoose.Types.ObjectId.isValid(studentId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid student ID"));
   }
 
-  const profile = await StudentProfile.findById(studentId);
+  const profile = await StudentProfile.findById(studentId).populate(PROFILE_POPULATE);
+
   if (!profile) {
     return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
   }
 
-  const result = await uploadToCloudinary(req.file, {
-    folder: "school-website/aadhar-cards/students",
-    resourceType: "auto", // image ya PDF, dono handle ho jayega
-  });
-
-  profile.aadharCardUrl = result.secure_url;
-  await profile.save();
-
-  res.json(new ApiResponse(200, { aadharCardUrl: profile.aadharCardUrl }, "Aadhar card uploaded successfully"));
+  return res.json(new ApiResponse(200, profile, "Student profile fetched successfully"));
 });
 
-// ================= UPLOAD MY PROFILE PHOTO =================
-// Access: STUDENT only
-// multipart/form-data: file
+// ======================================================
+// UPLOAD AADHAR FRONT/BACK
+// ======================================================
+
+exports.uploadStudentAadhar = asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(studentId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid student ID"));
+  }
+
+  const frontFile = req.files?.aadharFront?.[0];
+  const backFile = req.files?.aadharBack?.[0];
+
+  if (!frontFile && !backFile) {
+    return res.status(400).json(
+      new ApiResponse(400, null, "Upload at least one of: aadharFront, aadharBack"),
+    );
+  }
+
+  const profile = await StudentProfile.findById(studentId);
+
+  if (!profile) {
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+  }
+
+  if (frontFile) {
+    const result = await uploadToCloudinary(frontFile, {
+      folder: "school-website/aadhar-cards/students",
+      resourceType: "auto",
+    });
+    profile.aadharFrontUrl = result.secure_url;
+  }
+
+  if (backFile) {
+    const result = await uploadToCloudinary(backFile, {
+      folder: "school-website/aadhar-cards/students",
+      resourceType: "auto",
+    });
+    profile.aadharBackUrl = result.secure_url;
+  }
+
+  await profile.save();
+
+  return res.json(
+    new ApiResponse(
+      200,
+      { aadharFrontUrl: profile.aadharFrontUrl, aadharBackUrl: profile.aadharBackUrl },
+      "Aadhar card uploaded successfully",
+    ),
+  );
+});
+
+// ======================================================
+// UPLOAD OTHER DOCUMENTS (admin, on behalf of a student)
+// ======================================================
+
+exports.uploadStudentDocument = asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+
+  const type = req.body.type || "OTHER";
+  const label = req.body.label || "";
+
+  if (!mongoose.Types.ObjectId.isValid(studentId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid student ID"));
+  }
+
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json(new ApiResponse(400, null, "No files uploaded"));
+  }
+
+  if (!StudentProfile.DOCUMENT_TYPES.includes(type)) {
+    return res.status(400).json(
+      new ApiResponse(400, null, `Invalid document type. Allowed: ${StudentProfile.DOCUMENT_TYPES.join(", ")}`),
+    );
+  }
+
+  if (type === "OTHER" && label.trim().length === 0) {
+    return res.status(400).json(new ApiResponse(400, null, "Label is required when document type is OTHER"));
+  }
+
+  const profile = await StudentProfile.findById(studentId);
+
+  if (!profile) {
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+  }
+
+  const uploaded = [];
+
+  for (const file of req.files) {
+    const result = await uploadToCloudinary(file, {
+      folder: "school-website/documents/students",
+      resourceType: "auto",
+    });
+
+    const doc = {
+      type,
+      label: label.trim(),
+      url: result.secure_url,
+      originalName: file.originalname || "",
+      uploadedBy: req.user._id,
+      uploadedAt: new Date(),
+    };
+
+    profile.documents.push(doc);
+    uploaded.push(doc);
+  }
+
+  await profile.save();
+
+  return res.status(201).json(
+    new ApiResponse(201, { documents: profile.documents, uploaded }, "Document(s) uploaded successfully"),
+  );
+});
+
+// ======================================================
+// DELETE OTHER DOCUMENT (admin)
+// ======================================================
+
+exports.deleteStudentDocument = asyncHandler(async (req, res) => {
+  const { studentId, documentId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(studentId) || !mongoose.Types.ObjectId.isValid(documentId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid student ID or document ID"));
+  }
+
+  const profile = await StudentProfile.findById(studentId);
+
+  if (!profile) {
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+  }
+
+  const doc = profile.documents.id(documentId);
+
+  if (!doc) {
+    return res.status(404).json(new ApiResponse(404, null, "Document not found"));
+  }
+
+  doc.deleteOne();
+  await profile.save();
+
+  return res.json(new ApiResponse(200, { documents: profile.documents }, "Document removed successfully"));
+});
+
+// ======================================================
+// MY DOCUMENTS — student self-service (view / add / remove own uploads)
+// FIX: previously students could only *see* their documents indirectly
+// through getMyProfile, and had no way to add or remove one themselves.
+// ======================================================
+
+exports.getMyDocuments = asyncHandler(async (req, res) => {
+  const profile = await StudentProfile.findOne({ user: req.user._id }).select("documents");
+
+  if (!profile) {
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+  }
+
+  return res.json(new ApiResponse(200, profile.documents, "Documents fetched successfully"));
+});
+
+exports.uploadMyDocument = asyncHandler(async (req, res) => {
+  const type = req.body.type || "OTHER";
+  const label = req.body.label || "";
+
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json(new ApiResponse(400, null, "No files uploaded"));
+  }
+
+  if (!StudentProfile.DOCUMENT_TYPES.includes(type)) {
+    return res.status(400).json(
+      new ApiResponse(400, null, `Invalid document type. Allowed: ${StudentProfile.DOCUMENT_TYPES.join(", ")}`),
+    );
+  }
+
+  if (type === "OTHER" && label.trim().length === 0) {
+    return res.status(400).json(new ApiResponse(400, null, "Label is required when document type is OTHER"));
+  }
+
+  const profile = await StudentProfile.findOne({ user: req.user._id });
+
+  if (!profile) {
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+  }
+
+  const uploaded = [];
+
+  for (const file of req.files) {
+    const result = await uploadToCloudinary(file, {
+      folder: "school-website/documents/students",
+      resourceType: "auto",
+    });
+
+    const doc = {
+      type,
+      label: label.trim(),
+      url: result.secure_url,
+      originalName: file.originalname || "",
+      uploadedBy: req.user._id,
+      uploadedAt: new Date(),
+    };
+
+    profile.documents.push(doc);
+    uploaded.push(doc);
+  }
+
+  await profile.save();
+
+  return res.status(201).json(
+    new ApiResponse(201, { documents: profile.documents, uploaded }, "Document(s) uploaded successfully"),
+  );
+});
+
+exports.deleteMyDocument = asyncHandler(async (req, res) => {
+  const { documentId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(documentId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid document ID"));
+  }
+
+  const profile = await StudentProfile.findOne({ user: req.user._id });
+
+  if (!profile) {
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+  }
+
+  const doc = profile.documents.id(documentId);
+
+  if (!doc) {
+    return res.status(404).json(new ApiResponse(404, null, "Document not found"));
+  }
+
+  // FIX: a student may only delete a document they themselves uploaded —
+  // not admin-uploaded/verified certificates (birth certificate, marksheet, etc).
+  if (String(doc.uploadedBy) !== String(req.user._id)) {
+    return res.status(403).json(new ApiResponse(403, null, "You can only delete documents you uploaded"));
+  }
+
+  doc.deleteOne();
+  await profile.save();
+
+  return res.json(new ApiResponse(200, { documents: profile.documents }, "Document removed successfully"));
+});
+
+// ======================================================
+// DOWNLOAD STUDENT PROFILE PDF — ADMIN
+// ======================================================
+
+exports.downloadStudentProfileByAdmin = asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(studentId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid student ID"));
+  }
+
+  const profile = await StudentProfile.findById(studentId).populate(PROFILE_POPULATE);
+
+  if (!profile) {
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+  }
+
+  const safeName = (profile.user?.name || "student")
+    .replace(/[^a-z0-9]/gi, "_")
+    .slice(0, 100);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${safeName}_profile.pdf"`);
+
+  await streamStudentProfilePdf(profile.toObject(), res, {
+    schoolName: process.env.SCHOOL_NAME || "School",
+  });
+});
+
+// ======================================================
+// DOWNLOAD MY PROFILE PDF
+// ======================================================
+
+exports.downloadMyProfile = asyncHandler(async (req, res) => {
+  const profile = await StudentProfile.findOne({ user: req.user._id }).populate(PROFILE_POPULATE);
+
+  if (!profile) {
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+  }
+
+  const safeName = (profile.user?.name || "my_profile")
+    .replace(/[^a-z0-9]/gi, "_")
+    .slice(0, 100);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${safeName}_profile.pdf"`);
+
+  await streamStudentProfilePdf(profile.toObject(), res, {
+    schoolName: process.env.SCHOOL_NAME || "School",
+  });
+});
+
+// ======================================================
+// UPLOAD MY PROFILE PHOTO
+// ======================================================
 
 exports.uploadMyProfilePhoto = asyncHandler(async (req, res) => {
   if (!req.file) {
-    return res
-      .status(400)
-      .json(
-        new ApiResponse(
-          400,
-          null,
-          "No profile photo uploaded"
-        )
-      );
+    return res.status(400).json(new ApiResponse(400, null, "No profile photo uploaded"));
   }
 
-  const profile = await StudentProfile.findOne({
-    user: req.user._id,
-  });
+  const profile = await StudentProfile.findOne({ user: req.user._id });
 
   if (!profile) {
-    return res
-      .status(404)
-      .json(
-        new ApiResponse(
-          404,
-          null,
-          "Student profile not found"
-        )
-      );
+    return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
   }
 
   const result = await uploadToCloudinary(req.file, {
@@ -365,16 +858,156 @@ exports.uploadMyProfilePhoto = asyncHandler(async (req, res) => {
   });
 
   profile.profilePhoto = result.secure_url;
-
   await profile.save();
 
-  res.json(
-    new ApiResponse(
-      200,
-      {
-        profilePhoto: profile.profilePhoto,
-      },
-      "Profile photo uploaded successfully"
-    )
+  return res.json(
+    new ApiResponse(200, { profilePhoto: profile.profilePhoto }, "Profile photo uploaded successfully"),
   );
+});
+
+// ======================================================
+// DELETE STUDENT
+// ======================================================
+
+exports.deleteStudent = asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(studentId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid student ID"));
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const profile = await StudentProfile.findById(studentId).session(session);
+
+    if (!profile) {
+      await session.abortTransaction();
+      return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+    }
+
+    const userId = profile.user;
+
+    await StudentProfile.deleteOne({ _id: profile._id }).session(session);
+    await User.deleteOne({ _id: userId, role: "STUDENT" }).session(session);
+
+    await session.commitTransaction();
+
+    return res.json(new ApiResponse(200, null, "Student deleted successfully"));
+  } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+});
+
+// ======================================================
+// LIFECYCLE — MARK LEFT / REACTIVATE / LIST LEFT STUDENTS
+// FIX: merged in from the separate studentLifecycleController so status
+// changes and the linked User.isActive toggle always happen atomically
+// (previously two sequential, non-transactional writes — if the second
+// one failed, the profile and the login state could end up out of sync).
+// ======================================================
+
+exports.markStudentLeft = asyncHandler(async (req, res) => {
+  const { reason } = req.body;
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid student ID"));
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const profile = await StudentProfile.findById(id).session(session);
+
+    if (!profile) {
+      await session.abortTransaction();
+      return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+    }
+
+    if (profile.status === "LEFT") {
+      await session.abortTransaction();
+      return res.status(400).json(new ApiResponse(400, null, "Student already marked as left"));
+    }
+
+    profile.status = "LEFT";
+    profile.leftReason = reason || "";
+    profile.leftDate = new Date();
+    await profile.save({ session });
+
+    await User.findByIdAndUpdate(profile.user, { isActive: false }, { session });
+
+    await session.commitTransaction();
+
+    return res.json(new ApiResponse(200, profile, "Student marked as left successfully"));
+  } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+});
+
+exports.reactivateStudent = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid student ID"));
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const profile = await StudentProfile.findById(id).session(session);
+
+    if (!profile) {
+      await session.abortTransaction();
+      return res.status(404).json(new ApiResponse(404, null, "Student profile not found"));
+    }
+
+    if (profile.status === "ACTIVE") {
+      await session.abortTransaction();
+      return res.status(400).json(new ApiResponse(400, null, "Student is already active"));
+    }
+
+    profile.status = "ACTIVE";
+    profile.leftReason = "";
+    profile.leftDate = null;
+    await profile.save({ session });
+
+    await User.findByIdAndUpdate(profile.user, { isActive: true }, { session });
+
+    await session.commitTransaction();
+
+    return res.json(new ApiResponse(200, profile, "Student reactivated successfully"));
+  } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+});
+
+exports.getLeftStudents = asyncHandler(async (req, res) => {
+  const students = await StudentProfile.find({ status: "LEFT" })
+    .populate("user", "name email")
+    .populate("class", "className section")
+    .sort({ leftDate: -1 });
+
+  return res.json(new ApiResponse(200, students, "Left students fetched successfully"));
 });

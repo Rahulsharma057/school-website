@@ -12,17 +12,14 @@ import {
   Chip,
   CircularProgress,
   Divider,
-  FormControl,
-  FormControlLabel,
   Grid,
   InputAdornment,
   MenuItem,
   Paper,
-  Radio,
-  RadioGroup,
-  Select,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 
@@ -34,13 +31,12 @@ import {
   Refresh,
   FilterAltOff,
   Save,
+  DoneAll,
+  Groups,
 } from "@mui/icons-material";
 
 import { useMyAssignments } from "@/hooks/useTeacherAssignments";
-
-import {
-  useStudentsByClass,
-} from "@/hooks/useStudent";
+import { useStudentsByClass } from "@/hooks/useStudent";
 
 import {
   useClassAttendance,
@@ -55,33 +51,76 @@ const STATUS = {
   LEAVE: "LEAVE",
 };
 
+/* ======================================================
+   DESIGN TOKENS — violet, corporate/enterprise palette
+====================================================== */
+
+const T = {
+  primary: "#6D28D9",
+  primaryDark: "#5B21B6",
+  primaryLight: "#8B5CF6",
+  primarySoft: "#F5F3FF",
+  bg: "#F8F7FC",
+  surface: "#FFFFFF",
+  border: "#E7E3F5",
+  textPrimary: "#1E1B2E",
+  textSecondary: "#6F6B87",
+  success: "#15803D",
+  successSoft: "#EEFBF3",
+  error: "#B91C1C",
+  errorSoft: "#FEF2F2",
+  warning: "#B45309",
+  warningSoft: "#FFF8EB",
+};
+
+const STATUS_STYLES = {
+  [STATUS.PRESENT]: { color: T.success, bg: T.successSoft, label: "Present" },
+  [STATUS.ABSENT]: { color: T.error, bg: T.errorSoft, label: "Absent" },
+  [STATUS.LEAVE]: { color: T.warning, bg: T.warningSoft, label: "Leave" },
+};
+
+/* ======================================================
+   HELPERS
+====================================================== */
+
+const getToday = () => {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
 const formatDate = (date) => {
   if (!date) return "";
 
-  return new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  const [year, month, day] = date.split("-");
+
+  if (!year || !month || !day) return date;
+
+  return `${day}/${month}/${year}`;
 };
 
-function TeacherAttendanceContent() {
-  // ======================================================
-  // STATE
-  // ======================================================
+const getStatusLabel = (status) =>
+  STATUS_STYLES[status]?.label || "-";
 
+/* ======================================================
+   MAIN
+====================================================== */
+
+function TeacherAttendanceContent() {
   const [classId, setClassId] = useState("");
-  const [date, setDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [date, setDate] = useState(getToday());
 
   const [statusMap, setStatusMap] = useState({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(STATUS.ALL);
 
-  // ======================================================
-  // TEACHER ASSIGNMENTS
-  // ======================================================
+  /* ======================================================
+     ASSIGNMENTS
+  ====================================================== */
 
   const {
     data: assignments = [],
@@ -90,20 +129,24 @@ function TeacherAttendanceContent() {
     refetch: refetchAssignments,
   } = useMyAssignments();
 
-  // ======================================================
-  // ONLY ASSIGNED CLASSES
-  // ======================================================
+  /* ======================================================
+     ASSIGNED CLASSES ONLY
+  ====================================================== */
 
   const assignedClasses = useMemo(() => {
     const map = new Map();
+
+    if (!Array.isArray(assignments)) {
+      return [];
+    }
 
     assignments.forEach((assignment) => {
       const cls = assignment?.class;
 
       if (!cls?._id) return;
 
-      if (!map.has(cls._id)) {
-        map.set(cls._id, {
+      if (!map.has(String(cls._id))) {
+        map.set(String(cls._id), {
           ...cls,
         });
       }
@@ -112,19 +155,43 @@ function TeacherAttendanceContent() {
     return Array.from(map.values());
   }, [assignments]);
 
-  // ======================================================
-  // STUDENTS
-  // ======================================================
+  /* ======================================================
+     STUDENTS
+  ====================================================== */
 
   const {
-    data: classStudents = [],
+    data: studentsResponse,
     isLoading: studentsLoading,
     isFetching: studentsFetching,
   } = useStudentsByClass(classId);
 
-  // ======================================================
-  // EXISTING ATTENDANCE
-  // ======================================================
+  const classStudents = useMemo(() => {
+    if (Array.isArray(studentsResponse)) {
+      return studentsResponse;
+    }
+
+    if (Array.isArray(studentsResponse?.students)) {
+      return studentsResponse.students;
+    }
+
+    if (Array.isArray(studentsResponse?.data)) {
+      return studentsResponse.data;
+    }
+
+    if (Array.isArray(studentsResponse?.data?.students)) {
+      return studentsResponse.data.students;
+    }
+
+    if (Array.isArray(studentsResponse?.results)) {
+      return studentsResponse.results;
+    }
+
+    return [];
+  }, [studentsResponse]);
+
+  /* ======================================================
+     EXISTING ATTENDANCE
+  ====================================================== */
 
   const {
     data: existing,
@@ -133,23 +200,20 @@ function TeacherAttendanceContent() {
     refetch,
   } = useClassAttendance(classId, date);
 
-  // ======================================================
-  // MUTATIONS
-  // ======================================================
+  /* ======================================================
+     MUTATIONS
+  ====================================================== */
 
-  const {
-    mutate: markAttendance,
-    isPending: marking,
-  } = useMarkAttendance();
+  const { mutate: markAttendance, isPending: marking } = useMarkAttendance();
 
-  const {
-    mutate: updateAttendance,
-    isPending: updating,
-  } = useUpdateAttendance();
+  const { mutate: updateAttendance, isPending: updating } =
+    useUpdateAttendance();
 
-  // ======================================================
-  // SELECTED CLASS
-  // ======================================================
+  const saving = marking || updating;
+
+  /* ======================================================
+     SELECTED CLASS
+  ====================================================== */
 
   const selectedClass = useMemo(() => {
     return assignedClasses.find(
@@ -157,9 +221,9 @@ function TeacherAttendanceContent() {
     );
   }, [assignedClasses, classId]);
 
-  // ======================================================
-  // AUTO SELECT FIRST ASSIGNED CLASS
-  // ======================================================
+  /* ======================================================
+     AUTO SELECT CLASS
+  ====================================================== */
 
   useEffect(() => {
     if (!classId && assignedClasses.length > 0) {
@@ -167,19 +231,19 @@ function TeacherAttendanceContent() {
     }
   }, [assignedClasses, classId]);
 
-  // ======================================================
-  // RESET CLASS DATA
-  // ======================================================
+  /* ======================================================
+     RESET FILTERS WHEN CLASS / DATE CHANGES
+  ====================================================== */
 
   useEffect(() => {
-    setStatusMap({});
     setSearch("");
     setStatusFilter(STATUS.ALL);
+    setStatusMap({});
   }, [classId, date]);
 
-  // ======================================================
-  // INITIALIZE ATTENDANCE
-  // ======================================================
+  /* ======================================================
+     INITIALIZE STATUS
+  ====================================================== */
 
   useEffect(() => {
     if (!classStudents.length) {
@@ -189,24 +253,22 @@ function TeacherAttendanceContent() {
 
     const map = {};
 
-    // Default = PRESENT
+    // Default all students to PRESENT
     classStudents.forEach((student) => {
       const studentId = student?.user?._id;
 
       if (studentId) {
-        map[studentId] = STATUS.PRESENT;
+        map[String(studentId)] = STATUS.PRESENT;
       }
     });
 
-    // Existing attendance override
-    if (existing?.records?.length) {
+    // Existing attendance overrides default
+    if (Array.isArray(existing?.records)) {
       existing.records.forEach((record) => {
-        const studentId =
-          record?.student?._id ||
-          record?.student;
+        const studentId = record?.student?._id || record?.student;
 
         if (studentId) {
-          map[studentId] = record.status;
+          map[String(studentId)] = record.status;
         }
       });
     }
@@ -214,44 +276,67 @@ function TeacherAttendanceContent() {
     setStatusMap(map);
   }, [classStudents, existing]);
 
-  // ======================================================
-  // STATUS CHANGE
-  // ======================================================
+  /* ======================================================
+     CHANGE STATUS
+  ====================================================== */
 
   const handleStatusChange = (studentId, status) => {
+    if (!studentId || !status) return;
+
     setStatusMap((previous) => ({
       ...previous,
-      [studentId]: status,
+      [String(studentId)]: status,
     }));
   };
 
-  // ======================================================
-  // COUNTS
-  // ======================================================
+  /* ======================================================
+     BULK STATUS
+  ====================================================== */
+
+  const markAll = (status) => {
+    const map = {};
+
+    classStudents.forEach((student) => {
+      const studentId = student?.user?._id;
+
+      if (studentId) {
+        map[String(studentId)] = status;
+      }
+    });
+
+    setStatusMap(map);
+  };
+
+  /* ======================================================
+     COUNTS
+  ====================================================== */
 
   const counts = useMemo(() => {
-    const values = Object.values(statusMap);
+    let present = 0;
+    let absent = 0;
+    let leave = 0;
+
+    classStudents.forEach((student) => {
+      const studentId = student?.user?._id;
+
+      const status = statusMap[String(studentId)] || STATUS.PRESENT;
+
+      if (status === STATUS.PRESENT) present++;
+      if (status === STATUS.ABSENT) absent++;
+      if (status === STATUS.LEAVE) leave++;
+    });
 
     return {
       total: classStudents.length,
-
-      present: values.filter(
-        (status) => status === STATUS.PRESENT
-      ).length,
-
-      absent: values.filter(
-        (status) => status === STATUS.ABSENT
-      ).length,
-
-      leave: values.filter(
-        (status) => status === STATUS.LEAVE
-      ).length,
+      present,
+      absent,
+      leave,
     };
-  }, [statusMap, classStudents]);
+  }, [classStudents, statusMap]);
 
-  // ======================================================
-  // FILTERED STUDENTS
-  // ======================================================
+  /* ======================================================
+     FILTERED STUDENTS
+  ====================================================== */
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -264,7 +349,7 @@ function TeacherAttendanceContent() {
       const roll = String(student?.rollNumber || "");
 
       const currentStatus =
-        statusMap[studentId] || STATUS.PRESENT;
+        statusMap[String(studentId)] || STATUS.PRESENT;
 
       const searchMatched =
         !query ||
@@ -273,37 +358,27 @@ function TeacherAttendanceContent() {
         roll.toLowerCase().includes(query);
 
       const statusMatched =
-        statusFilter === STATUS.ALL ||
-        currentStatus === statusFilter;
+        statusFilter === STATUS.ALL || currentStatus === statusFilter;
 
       return searchMatched && statusMatched;
     });
-  }, [
-    classStudents,
-    search,
-    statusFilter,
-    statusMap,
-  ]);
+  }, [classStudents, search, statusFilter, statusMap]);
 
-  // ======================================================
-  // CLEAR FILTERS
-  // ======================================================
+  /* ======================================================
+     CLEAR FILTERS
+  ====================================================== */
 
   const clearFilters = () => {
     setSearch("");
     setStatusFilter(STATUS.ALL);
   };
 
-  // ======================================================
-  // SAVE ATTENDANCE
-  // ======================================================
+  /* ======================================================
+     SAVE
+  ====================================================== */
 
   const handleSubmit = () => {
-    if (!classId) {
-      return;
-    }
-
-    if (!classStudents.length) {
+    if (!classId || !classStudents.length || saving) {
       return;
     }
 
@@ -315,11 +390,12 @@ function TeacherAttendanceContent() {
 
         return {
           student: studentId,
-          status:
-            statusMap[studentId] || STATUS.PRESENT,
+          status: statusMap[String(studentId)] || STATUS.PRESENT,
         };
       })
       .filter(Boolean);
+
+    if (!records.length) return;
 
     const payload = {
       classId,
@@ -340,674 +416,822 @@ function TeacherAttendanceContent() {
     }
   };
 
-  // ======================================================
-  // LOADING
-  // ======================================================
+  /* ======================================================
+     REFRESH
+  ====================================================== */
 
-  const pageLoading =
-    assignmentsLoading ||
-    studentsLoading ||
-    attendanceLoading;
+  const handleRefresh = () => {
+    refetch();
+    refetchAssignments();
+  };
 
-  // ======================================================
-  // RENDER
-  // ======================================================
+  /* ======================================================
+     LOADING
+  ====================================================== */
+
+  const dataLoading =
+    assignmentsLoading || studentsLoading || attendanceLoading;
+
+  const isRefreshing =
+    assignmentsFetching || attendanceFetching || studentsFetching;
+
+  /* ======================================================
+     RENDER
+  ====================================================== */
 
   return (
     <Box
       sx={{
-        p: {
-          xs: 1.5,
-          sm: 2,
-          md: 3,
-        },
-        maxWidth: 1500,
-        mx: "auto",
+        minHeight: "100vh",
+        bgcolor: T.bg,
+        px: { xs: 1.5, sm: 2, md: 3 },
+        py: { xs: 2, md: 3 },
       }}
     >
-      {/* ==================================================
-          HEADER
-      ================================================== */}
+      <Box sx={{ maxWidth: 1440, mx: "auto" }}>
+        {/* ==================================================
+            HEADER
+        ================================================== */}
 
-      <Box
-        sx={{
-          mb: 3,
-          display: "flex",
-          alignItems: {
-            xs: "flex-start",
-            md: "center",
-          },
-          justifyContent: "space-between",
-          flexDirection: {
-            xs: "column",
-            md: "row",
-          },
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h5"
-            fontWeight={700}
-          >
-            My Attendance
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ mt: 0.5 }}
-          >
-            Mark and manage attendance for your assigned classes
-          </Typography>
-        </Box>
-
-        <Button
-          variant="outlined"
-          startIcon={<Refresh />}
-          onClick={() => {
-            refetch();
-            refetchAssignments();
-          }}
-          disabled={
-            assignmentsFetching ||
-            attendanceFetching ||
-            studentsFetching
-          }
+        <Box
           sx={{
-            textTransform: "none",
+            mb: 2.5,
+            display: "flex",
+            alignItems: { xs: "flex-start", md: "center" },
+            justifyContent: "space-between",
+            gap: 1.5,
+            flexWrap: "wrap",
           }}
         >
-          Refresh
-        </Button>
-      </Box>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: `linear-gradient(135deg, ${T.primary}, ${T.primaryLight})`,
+                boxShadow: `0 4px 12px ${T.primary}33`,
+              }}
+            >
+              <Groups sx={{ color: "#fff", fontSize: 22 }} />
+            </Box>
+            <Box>
+              <Typography
+                sx={{
+                  fontSize: { xs: 19, md: 22 },
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                  color: T.textPrimary,
+                }}
+              >
+                Attendance
+              </Typography>
+              <Typography variant="caption" sx={{ color: T.textSecondary }}>
+                Mark and manage daily attendance for your assigned classes
+              </Typography>
+            </Box>
+          </Stack>
 
-      {/* ==================================================
-          NO ASSIGNMENTS
-      ================================================== */}
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={
+              <Refresh
+                sx={{
+                  animation: isRefreshing
+                    ? "attendanceSpin 1s linear infinite"
+                    : "none",
+                  "@keyframes attendanceSpin": {
+                    from: { transform: "rotate(0deg)" },
+                    to: { transform: "rotate(360deg)" },
+                  },
+                }}
+              />
+            }
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            sx={{
+              minHeight: 38,
+              borderRadius: 2,
+              textTransform: "none",
+              fontWeight: 600,
+              color: T.primary,
+              borderColor: T.border,
+              bgcolor: T.surface,
+              "&:hover": {
+                borderColor: T.primary,
+                bgcolor: T.primarySoft,
+              },
+            }}
+          >
+            Refresh
+          </Button>
+        </Box>
 
-      {!assignmentsLoading &&
-        assignedClasses.length === 0 && (
-          <Alert severity="info" sx={{ borderRadius: 2 }}>
-            You currently have no active class assignments.
+        {/* ==================================================
+            NO ASSIGNMENT
+        ================================================== */}
+
+        {!assignmentsLoading && assignedClasses.length === 0 && (
+          <Alert
+            severity="info"
+            sx={{
+              borderRadius: 2,
+              py: 1,
+              bgcolor: T.primarySoft,
+              color: T.primaryDark,
+              "& .MuiAlert-icon": { color: T.primary },
+            }}
+          >
+            No active class assignments are available for your account.
           </Alert>
         )}
 
-      {/* ==================================================
-          FILTER PANEL
-      ================================================== */}
+        {assignedClasses.length > 0 && (
+          <>
+            {/* ==================================================
+                CONTROL BAR
+            ================================================== */}
 
-      {assignedClasses.length > 0 && (
-        <Paper
-          elevation={0}
-          sx={{
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 2,
-            p: {
-              xs: 1.5,
-              md: 2,
-            },
-            mb: 3,
-          }}
-        >
-          <Typography
-            fontWeight={600}
-            sx={{ mb: 1.5 }}
-          >
-            Attendance Filters
-          </Typography>
-
-          <Grid container spacing={2}>
-            {/* CLASS */}
-
-            <Grid item xs={12} sm={6} md={3}>
-              <FormControl
-                fullWidth
-                size="small"
-              >
-                <Select
-                  displayEmpty
-                  value={classId}
-                  onChange={(e) =>
-                    setClassId(e.target.value)
-                  }
-                  disabled={assignmentsLoading}
-                >
-                  <MenuItem value="" disabled>
-                    Select Class
-                  </MenuItem>
-
-                  {assignedClasses.map((item) => (
-                    <MenuItem
-                      key={item._id}
-                      value={item._id}
-                    >
-                      {item.className}
-                      {item.section
-                        ? ` - ${item.section}`
-                        : ""}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            {/* DATE */}
-
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                fullWidth
-                size="small"
-                type="date"
-                label="Date"
-                value={date}
-                onChange={(e) =>
-                  setDate(e.target.value)
-                }
-                InputLabelProps={{
-                  shrink: true,
-                }}
-              />
-            </Grid>
-
-            {/* SEARCH */}
-
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                size="small"
-                value={search}
-                onChange={(e) =>
-                  setSearch(e.target.value)
-                }
-                placeholder="Search name, roll no or email"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-
-            {/* CLEAR */}
-
-            <Grid item xs={12} md={2}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<FilterAltOff />}
-                onClick={clearFilters}
-                disabled={
-                  !search &&
-                  statusFilter === STATUS.ALL
-                }
-                sx={{
-                  height: 40,
-                  textTransform: "none",
-                }}
-              >
-                Clear
-              </Button>
-            </Grid>
-          </Grid>
-
-          <Divider sx={{ my: 2 }} />
-
-          {/* STATUS FILTER */}
-
-          <Stack
-            direction="row"
-            spacing={1}
-            useFlexGap
-            flexWrap="wrap"
-          >
-            <Chip
-              label={`All (${counts.total})`}
-              clickable
-              color={
-                statusFilter === STATUS.ALL
-                  ? "primary"
-                  : "default"
-              }
-              onClick={() =>
-                setStatusFilter(STATUS.ALL)
-              }
-            />
-
-            <Chip
-              label={`Present (${counts.present})`}
-              clickable
-              color={
-                statusFilter === STATUS.PRESENT
-                  ? "success"
-                  : "default"
-              }
-              onClick={() =>
-                setStatusFilter(STATUS.PRESENT)
-              }
-            />
-
-            <Chip
-              label={`Absent (${counts.absent})`}
-              clickable
-              color={
-                statusFilter === STATUS.ABSENT
-                  ? "error"
-                  : "default"
-              }
-              onClick={() =>
-                setStatusFilter(STATUS.ABSENT)
-              }
-            />
-
-            <Chip
-              label={`Leave (${counts.leave})`}
-              clickable
-              color={
-                statusFilter === STATUS.LEAVE
-                  ? "warning"
-                  : "default"
-              }
-              onClick={() =>
-                setStatusFilter(STATUS.LEAVE)
-              }
-            />
-          </Stack>
-        </Paper>
-      )}
-
-      {/* ==================================================
-          SUMMARY
-      ================================================== */}
-
-      {classId && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={6} md={4}>
-            <SummaryCard
-              title="Present"
-              value={counts.present}
-              icon={<CheckCircle />}
-              color="success"
-            />
-          </Grid>
-
-          <Grid item xs={6} md={4}>
-            <SummaryCard
-              title="Absent"
-              value={counts.absent}
-              icon={<Cancel />}
-              color="error"
-            />
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <SummaryCard
-              title="Leave"
-              value={counts.leave}
-              icon={<EventBusy />}
-              color="warning"
-            />
-          </Grid>
-        </Grid>
-      )}
-
-      {/* ==================================================
-          LOADING
-      ================================================== */}
-
-      {classId && pageLoading && (
-        <Paper
-          elevation={0}
-          sx={{
-            p: 6,
-            textAlign: "center",
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 2,
-          }}
-        >
-          <CircularProgress />
-
-          <Typography
-            sx={{ mt: 2 }}
-            color="text.secondary"
-          >
-            Loading students and attendance...
-          </Typography>
-        </Paper>
-      )}
-
-      {/* ==================================================
-          TABLE
-      ================================================== */}
-
-      {classId && !pageLoading && (
-        <Paper
-          elevation={0}
-          sx={{
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 2,
-            overflow: "hidden",
-          }}
-        >
-          {/* TABLE HEADER */}
-
-          <Box
-            sx={{
-              p: 2,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 2,
-              flexWrap: "wrap",
-            }}
-          >
-            <Box>
-              <Typography fontWeight={700}>
-                Student Attendance
-              </Typography>
-
-              <Typography
-                variant="body2"
-                color="text.secondary"
-              >
-                {selectedClass?.className || "Class"}
-                {selectedClass?.section
-                  ? ` - ${selectedClass.section}`
-                  : ""}
-                {" • "}
-                {formatDate(date)}
-              </Typography>
-            </Box>
-
-            <Chip
-              size="small"
-              label={`${filteredStudents.length} Students`}
-            />
-          </Box>
-
-          <Divider />
-
-          {/* EMPTY */}
-
-          {!filteredStudents.length ? (
-            <Box
+            <Paper
+              elevation={0}
               sx={{
-                p: 6,
-                textAlign: "center",
-              }}
-            >
-              <Typography fontWeight={600}>
-                No students found
-              </Typography>
-
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.5 }}
-              >
-                Try changing the search or status filter.
-              </Typography>
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                overflowX: "auto",
+                mb: 2,
+                border: `1px solid ${T.border}`,
+                borderRadius: 3,
+                bgcolor: T.surface,
+                overflow: "hidden",
               }}
             >
               <Box
                 sx={{
-                  minWidth: 900,
+                  p: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.25,
+                  flexWrap: "wrap",
                 }}
               >
-                {filteredStudents.map(
-                  (student, index) => {
-                    const studentId =
-                      student?.user?._id;
+                {/* CLASS */}
 
-                    const currentStatus =
-                      statusMap[studentId] ||
-                      STATUS.PRESENT;
+                <TextField
+                  select
+                  size="small"
+                  label="Class"
+                  value={classId}
+                  onChange={(e) => setClassId(e.target.value)}
+                  sx={{ minWidth: { xs: "100%", sm: 190 } }}
+                  disabled={assignmentsLoading}
+                >
+                  {assignedClasses.map((item) => (
+                    <MenuItem key={item._id} value={item._id}>
+                      {item.className}
+                      {item.section ? ` - ${item.section}` : ""}
+                    </MenuItem>
+                  ))}
+                </TextField>
 
+                {/* DATE */}
+
+                <TextField
+                  size="small"
+                  type="date"
+                  label="Date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ width: { xs: "100%", sm: 165 } }}
+                />
+
+                {/* SEARCH */}
+
+                <TextField
+                  size="small"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by name, email or roll no."
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search fontSize="small" sx={{ color: T.textSecondary }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{ flex: 1, minWidth: { xs: "100%", sm: 240 } }}
+                />
+
+                {/* CLEAR */}
+
+                {(search || statusFilter !== STATUS.ALL) && (
+                  <Button
+                    size="small"
+                    variant="text"
+                    startIcon={<FilterAltOff fontSize="small" />}
+                    onClick={clearFilters}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 600,
+                      color: T.textSecondary,
+                    }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </Box>
+
+              <Divider sx={{ borderColor: T.border }} />
+
+              {/* QUICK ACTIONS */}
+
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1.25,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.9,
+                  flexWrap: "wrap",
+                  bgcolor: T.primarySoft,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  fontWeight={700}
+                  sx={{ mr: 0.5, color: T.primaryDark, letterSpacing: "0.3px" }}
+                >
+                  MARK ALL AS
+                </Typography>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<DoneAll fontSize="small" />}
+                  onClick={() => markAll(STATUS.PRESENT)}
+                  sx={{
+                    minHeight: 30,
+                    borderRadius: 1.75,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    bgcolor: T.surface,
+                    borderColor: T.successSoft,
+                    color: T.success,
+                    "&:hover": { borderColor: T.success, bgcolor: T.successSoft },
+                  }}
+                >
+                  Present
+                </Button>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => markAll(STATUS.ABSENT)}
+                  sx={{
+                    minHeight: 30,
+                    borderRadius: 1.75,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    bgcolor: T.surface,
+                    borderColor: T.errorSoft,
+                    color: T.error,
+                    "&:hover": { borderColor: T.error, bgcolor: T.errorSoft },
+                  }}
+                >
+                  Absent
+                </Button>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => markAll(STATUS.LEAVE)}
+                  sx={{
+                    minHeight: 30,
+                    borderRadius: 1.75,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    bgcolor: T.surface,
+                    borderColor: T.warningSoft,
+                    color: T.warning,
+                    "&:hover": { borderColor: T.warning, bgcolor: T.warningSoft },
+                  }}
+                >
+                  Leave
+                </Button>
+
+                <Box
+                  sx={{
+                    ml: { xs: 0, sm: "auto" },
+                    display: "flex",
+                    gap: 0.6,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {[
+                    { key: STATUS.ALL, label: `All ${counts.total}` },
+                    { key: STATUS.PRESENT, label: `Present ${counts.present}` },
+                    { key: STATUS.ABSENT, label: `Absent ${counts.absent}` },
+                    { key: STATUS.LEAVE, label: `Leave ${counts.leave}` },
+                  ].map((item) => {
+                    const active = statusFilter === item.key;
                     return (
-                      <Box
-                        key={studentId}
+                      <Chip
+                        key={item.key}
+                        size="small"
+                        label={item.label}
+                        onClick={() => setStatusFilter(item.key)}
+                        clickable
                         sx={{
-                          px: 2,
-                          py: 1.5,
-                          borderBottom:
-                            "1px solid",
-                          borderColor:
-                            "divider",
+                          fontWeight: 700,
+                          color: active ? "#fff" : T.primaryDark,
+                          bgcolor: active ? T.primary : T.surface,
+                          border: `1px solid ${active ? T.primary : T.border}`,
+                          "&:hover": {
+                            bgcolor: active ? T.primaryDark : T.primarySoft,
+                          },
+                        }}
+                      />
+                    );
+                  })}
+                </Box>
+              </Box>
+            </Paper>
+
+            {/* ==================================================
+                COMPACT SUMMARY
+            ================================================== */}
+{/* 
+            {classId && (
+              <Grid container spacing={1.25} sx={{ mb: 2 }}>
+                <Grid item xs={6} sm={3}>
+                  <MiniStat
+                    label="Students"
+                    value={counts.total}
+                    icon={<Groups />}
+                    accent={T.primary}
+                    accentSoft={T.primarySoft}
+                  />
+                </Grid>
+
+                <Grid item xs={6} sm={3}>
+                  <MiniStat
+                    label="Present"
+                    value={counts.present}
+                    icon={<CheckCircle />}
+                    accent={T.success}
+                    accentSoft={T.successSoft}
+                  />
+                </Grid>
+
+                <Grid item xs={6} sm={3}>
+                  <MiniStat
+                    label="Absent"
+                    value={counts.absent}
+                    icon={<Cancel />}
+                    accent={T.error}
+                    accentSoft={T.errorSoft}
+                  />
+                </Grid>
+
+                <Grid item xs={6} sm={3}>
+                  <MiniStat
+                    label="Leave"
+                    value={counts.leave}
+                    icon={<EventBusy />}
+                    accent={T.warning}
+                    accentSoft={T.warningSoft}
+                  />
+                </Grid>
+              </Grid>
+            )} */}
+
+            {/* ==================================================
+                LOADING
+            ================================================== */}
+
+            {classId && dataLoading && (
+              <Paper
+                elevation={0}
+                sx={{
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 3,
+                  bgcolor: T.surface,
+                  py: 6,
+                  textAlign: "center",
+                }}
+              >
+                <CircularProgress size={28} sx={{ color: T.primary }} />
+                <Typography sx={{ mt: 1.5, color: T.textPrimary }} fontWeight={600}>
+                  Loading attendance
+                </Typography>
+                <Typography variant="caption" sx={{ color: T.textSecondary }}>
+                  Fetching students and attendance data...
+                </Typography>
+              </Paper>
+            )}
+
+            {/* ==================================================
+                ATTENDANCE TABLE
+            ================================================== */}
+
+            {classId && !dataLoading && (
+              <Paper
+                elevation={0}
+                sx={{
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 3,
+                  overflow: "hidden",
+                  bgcolor: T.surface,
+                }}
+              >
+                {/* TABLE HEADER */}
+<Box
+  sx={{
+    px: 2,
+    py: 1.25,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 1,
+    flexWrap: "wrap",
+    bgcolor: "#4C1D95",
+    borderBottom: "1px solid #5B21B6",
+  }}
+>
+  <Box sx={{ minWidth: 0 }}>
+    <Typography
+      variant="caption"
+      sx={{
+        color: "#FFFFFF",
+        fontWeight: 600,
+      }}
+    >
+      {formatDate(date)}
+      {existing ? " • Already saved" : " • Not saved yet"}
+    </Typography>
+  </Box>
+
+  <Chip
+    size="small"
+    label={`${filteredStudents.length}/${counts.total} students`}
+    sx={{
+      height: 28,
+      fontWeight: 700,
+      color: "#FFFFFF",
+      bgcolor: "#6D28D9",
+      border: "1px solid #8B5CF6",
+      borderRadius: 1.5,
+    }}
+  />
+</Box>
+
+                <Divider sx={{ borderColor: T.border }} />
+
+                {/* EMPTY */}
+
+                {!filteredStudents.length ? (
+                  <Box sx={{ py: 7, px: 2, textAlign: "center" }}>
+                    <Search sx={{ fontSize: 36, color: T.border }} />
+                    <Typography fontWeight={700} sx={{ mt: 0.5, color: T.textPrimary }}>
+                      No students found
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: T.textSecondary }}>
+                      Try another search term or status filter.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ overflowX: "auto" }}>
+                    <Box sx={{ minWidth: 760 }}>
+                      {/* COLUMN HEADER */}
+
+                      <Box
+                        sx={{
                           display: "grid",
                           gridTemplateColumns:
-                            "60px 100px minmax(180px, 1fr) minmax(220px, 1fr) 350px",
-                          alignItems: "center",
+                            "45px 80px minmax(200px, 1fr) 105px 290px",
                           gap: 1,
+                          alignItems: "center",
+                          px: 2,
+                          py: 1,
+                          bgcolor: T.bg,
+                          borderBottom: `1px solid ${T.border}`,
+                        }}
+                      >
+                        <HeaderCell>#</HeaderCell>
+                        <HeaderCell>Roll</HeaderCell>
+                        <HeaderCell>Student</HeaderCell>
+                        <HeaderCell>Status</HeaderCell>
+                        <HeaderCell>Attendance</HeaderCell>
+                      </Box>
+
+                      {/* STUDENTS */}
+
+                      {filteredStudents.map((student, index) => {
+                        const studentId = student?.user?._id;
+
+                        const currentStatus =
+                          statusMap[String(studentId)] || STATUS.PRESENT;
+
+                        const studentName = student?.user?.name || "-";
+                        const email = student?.user?.email || "";
+
+                        return (
+                          <Box
+                            key={studentId || index}
+                            sx={{
+                              display: "grid",
+                              gridTemplateColumns:
+                                "45px 80px minmax(200px, 1fr) 105px 290px",
+                              gap: 1,
+                              alignItems: "center",
+                              px: 2,
+                              py: 1,
+                              minHeight: 58,
+                              borderBottom: `1px solid ${T.border}`,
+                              "&:hover": { bgcolor: T.primarySoft },
+                              transition: "background-color 0.15s ease",
+                            }}
+                          >
+                            {/* INDEX */}
+                            <Typography variant="caption" fontWeight={600} sx={{ color: T.textSecondary }}>
+                              {index + 1}
+                            </Typography>
+
+                            {/* ROLL */}
+                            <Typography variant="body2" fontWeight={700} sx={{ color: T.textPrimary }}>
+                              {student?.rollNumber || "-"}
+                            </Typography>
+
+                            {/* STUDENT */}
+                            <Box sx={{ minWidth: 0, display: "flex", alignItems: "center", gap: 1.25 }}>
+                              <Box
+                                sx={{
+                                  width: 32,
+                                  height: 32,
+                                  flexShrink: 0,
+                                  borderRadius: "50%",
+                                  background: `linear-gradient(135deg, ${T.primary}, ${T.primaryLight})`,
+                                  color: "#fff",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {studentName.charAt(0).toUpperCase()}
+                              </Box>
+
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" fontWeight={600} noWrap sx={{ color: T.textPrimary }}>
+                                  {studentName}
+                                </Typography>
+
+                                {email && (
+                                  <Typography
+                                    variant="caption"
+                                    noWrap
+                                    sx={{ display: "block", lineHeight: 1.2, color: T.textSecondary }}
+                                  >
+                                    {email}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Box>
+
+                            {/* STATUS */}
+                            <Chip
+                              size="small"
+                              label={getStatusLabel(currentStatus)}
+                              sx={{
+                                width: "fit-content",
+                                height: 24,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: STATUS_STYLES[currentStatus]?.color,
+                                bgcolor: STATUS_STYLES[currentStatus]?.bg,
+                              }}
+                            />
+
+                            {/* CONTROL */}
+                            <ToggleButtonGroup
+                              size="small"
+                              exclusive
+                              value={currentStatus}
+                              onChange={(e, value) =>
+                                handleStatusChange(studentId, value)
+                              }
+                              sx={{
+                                bgcolor: T.bg,
+                                borderRadius: 1.75,
+                                p: 0.3,
+                                gap: 0.3,
+                                "& .MuiToggleButtonGroup-grouped": {
+                                  border: "none",
+                                  borderRadius: "10px !important",
+                                },
+                              }}
+                            >
+                              <ToggleButton
+                                value={STATUS.PRESENT}
+                                sx={{
+                                  px: 1.1,
+                                  py: 0.3,
+                                  fontSize: 11.5,
+                                  fontWeight: 700,
+                                  textTransform: "none",
+                                  color: T.success,
+                                  "&.Mui-selected": {
+                                    color: "#fff",
+                                    bgcolor: T.success,
+                                    "&:hover": { bgcolor: T.success },
+                                  },
+                                }}
+                              >
+                                Present
+                              </ToggleButton>
+                              <ToggleButton
+                                value={STATUS.ABSENT}
+                                sx={{
+                                  px: 1.1,
+                                  py: 0.3,
+                                  fontSize: 11.5,
+                                  fontWeight: 700,
+                                  textTransform: "none",
+                                  color: T.error,
+                                  "&.Mui-selected": {
+                                    color: "#fff",
+                                    bgcolor: T.error,
+                                    "&:hover": { bgcolor: T.error },
+                                  },
+                                }}
+                              >
+                                Absent
+                              </ToggleButton>
+                              <ToggleButton
+                                value={STATUS.LEAVE}
+                                sx={{
+                                  px: 1.1,
+                                  py: 0.3,
+                                  fontSize: 11.5,
+                                  fontWeight: 700,
+                                  textTransform: "none",
+                                  color: T.warning,
+                                  "&.Mui-selected": {
+                                    color: "#fff",
+                                    bgcolor: T.warning,
+                                    "&:hover": { bgcolor: T.warning },
+                                  },
+                                }}
+                              >
+                                Leave
+                              </ToggleButton>
+                            </ToggleButtonGroup>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* ==================================================
+                    SAVE FOOTER
+                ================================================== */}
+
+                {classStudents.length > 0 && (
+                  <>
+                    <Divider sx={{ borderColor: T.border }} />
+
+                    <Box
+                      sx={{
+                        px: 2,
+                        py: 1.25,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 1.5,
+                        flexWrap: "wrap",
+                        bgcolor: T.bg,
+                        position: "sticky",
+                        bottom: 0,
+                        zIndex: 5,
+                      }}
+                    >
+                      <Box>
+                        <Typography variant="caption" fontWeight={700} sx={{ color: T.textPrimary }}>
+                          {counts.present} Present • {counts.absent} Absent •{" "}
+                          {counts.leave} Leave
+                        </Typography>
+
+                        <Typography
+                          variant="caption"
+                          sx={{ display: "block", color: T.textSecondary }}
+                        >
+                          {existing
+                            ? "Existing attendance will be updated."
+                            : "Review and save today's attendance."}
+                        </Typography>
+                      </Box>
+
+                      <Button
+                        variant="contained"
+                        onClick={handleSubmit}
+                        disabled={saving}
+                        startIcon={
+                          saving ? (
+                            <CircularProgress size={17} color="inherit" />
+                          ) : (
+                            <Save />
+                          )
+                        }
+                        sx={{
+                          minWidth: 150,
+                          minHeight: 22,
+                          borderRadius: 2,
+                          textTransform: "none",
+                          fontWeight: 700,
+                          boxShadow: "none",
+                          bgcolor: T.primary,
                           "&:hover": {
-                            backgroundColor:
-                              "action.hover",
+                            bgcolor: T.primaryDark,
+                            boxShadow: `0 6px 16px ${T.primary}40`,
                           },
                         }}
                       >
-                        <Typography
-                          variant="body2"
-                        >
-                          {index + 1}
-                        </Typography>
-
-                        <Typography
-                          variant="body2"
-                          fontWeight={600}
-                        >
-                          {student?.rollNumber ||
-                            "-"}
-                        </Typography>
-
-                        <Box>
-                          <Typography
-                            variant="body2"
-                            fontWeight={600}
-                          >
-                            {student?.user?.name ||
-                              "-"}
-                          </Typography>
-
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                          >
-                            {student?.user?.email ||
-                              "-"}
-                          </Typography>
-                        </Box>
-
-                        <Box>
-                          <Chip
-                            size="small"
-                            label={
-                              currentStatus ===
-                              STATUS.PRESENT
-                                ? "Present"
-                                : currentStatus ===
-                                  STATUS.ABSENT
-                                ? "Absent"
-                                : "Leave"
-                            }
-                            color={
-                              currentStatus ===
-                              STATUS.PRESENT
-                                ? "success"
-                                : currentStatus ===
-                                  STATUS.ABSENT
-                                ? "error"
-                                : "warning"
-                            }
-                          />
-                        </Box>
-
-                        <RadioGroup
-                          row
-                          value={currentStatus}
-                          onChange={(e) =>
-                            handleStatusChange(
-                              studentId,
-                              e.target.value
-                            )
-                          }
-                        >
-                          <FormControlLabel
-                            value={
-                              STATUS.PRESENT
-                            }
-                            control={
-                              <Radio
-                                size="small"
-                                color="success"
-                              />
-                            }
-                            label="Present"
-                          />
-
-                          <FormControlLabel
-                            value={
-                              STATUS.ABSENT
-                            }
-                            control={
-                              <Radio
-                                size="small"
-                                color="error"
-                              />
-                            }
-                            label="Absent"
-                          />
-
-                          <FormControlLabel
-                            value={
-                              STATUS.LEAVE
-                            }
-                            control={
-                              <Radio
-                                size="small"
-                                color="warning"
-                              />
-                            }
-                            label="Leave"
-                          />
-                        </RadioGroup>
-                      </Box>
-                    );
-                  }
+                        {saving
+                          ? "Saving..."
+                          : existing
+                          ? "Update Attendance"
+                          : "Save Attendance"}
+                      </Button>
+                    </Box>
+                  </>
                 )}
-              </Box>
-            </Box>
-          )}
-
-          {/* ==================================================
-              SAVE
-          ================================================== */}
-
-          {classStudents.length > 0 && (
-            <Box
-              sx={{
-                p: 2,
-                borderTop: "1px solid",
-                borderColor: "divider",
-                display: "flex",
-                justifyContent: "flex-end",
-                backgroundColor:
-                  "background.paper",
-              }}
-            >
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={
-                  marking || updating ? (
-                    <CircularProgress
-                      size={18}
-                      color="inherit"
-                    />
-                  ) : (
-                    <Save />
-                  )
-                }
-                onClick={handleSubmit}
-                disabled={marking || updating}
-                sx={{
-                  minWidth: 200,
-                  textTransform: "none",
-                }}
-              >
-                {marking || updating
-                  ? "Saving..."
-                  : existing
-                  ? "Update Attendance"
-                  : "Mark Attendance"}
-              </Button>
-            </Box>
-          )}
-        </Paper>
-      )}
+              </Paper>
+            )}
+          </>
+        )}
+      </Box>
     </Box>
   );
 }
 
-// ======================================================
-// SUMMARY CARD
-// ======================================================
+/* ======================================================
+   HEADER CELL
+====================================================== */
 
-function SummaryCard({
-  title,
-  value,
-  icon,
-  color,
-}) {
+function HeaderCell({ children }) {
+  return (
+    <Typography
+      variant="caption"
+      fontWeight={700}
+      sx={{
+        textTransform: "uppercase",
+        fontSize: 10.5,
+        letterSpacing: "0.5px",
+        color: T.textSecondary,
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+/* ======================================================
+   MINI STAT
+====================================================== */
+
+function MiniStat({ label, value, icon, accent, accentSoft }) {
   return (
     <Card
       elevation={0}
       sx={{
-        height: "100%",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 2,
+        border: `1px solid ${T.border}`,
+        borderRadius: 2.5,
+        bgcolor: T.surface,
       }}
     >
       <CardContent
         sx={{
-          p: {
-            xs: 1.5,
-            md: 2,
-          },
-          "&:last-child": {
-            pb: {
-              xs: 1.5,
-              md: 2,
-            },
-          },
+          p: { xs: 1.25, sm: 1.5 },
+          "&:last-child": { pb: { xs: 1.25, sm: 1.5 } },
         }}
       >
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-        >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
           <Box>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-            >
-              {title}
+            <Typography variant="caption" fontWeight={600} sx={{ color: T.textSecondary }}>
+              {label}
             </Typography>
 
             <Typography
-              variant="h5"
-              fontWeight={700}
-              sx={{ mt: 0.5 }}
+              sx={{
+                fontSize: { xs: 20, sm: 22 },
+                lineHeight: 1.1,
+                fontWeight: 700,
+                mt: 0.25,
+                color: T.textPrimary,
+              }}
             >
               {value}
             </Typography>
@@ -1015,15 +1239,16 @@ function SummaryCard({
 
           <Box
             sx={{
-              width: 42,
-              height: 42,
-              borderRadius: "50%",
+              width: 34,
+              height: 34,
+              flexShrink: 0,
+              borderRadius: 1.5,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: `${color}.main`,
-              backgroundColor:
-                "action.hover",
+              color: accent,
+              bgcolor: accentSoft,
+              "& svg": { fontSize: 19 },
             }}
           >
             {icon}
@@ -1034,9 +1259,9 @@ function SummaryCard({
   );
 }
 
-// ======================================================
-// PAGE
-// ======================================================
+/* ======================================================
+   PAGE
+====================================================== */
 
 export default function TeacherAttendancePage() {
   return (

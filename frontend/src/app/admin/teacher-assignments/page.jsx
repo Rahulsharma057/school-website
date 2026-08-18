@@ -48,7 +48,14 @@ import {
 import { useAllTeachers } from "@/hooks/useTeacher";
 
 export default function TeacherAssignmentsPage() {
-  const { data: teachers = [] } = useAllTeachers();
+const { data: teacherResponse = [] } = useAllTeachers();
+
+const teachers = Array.isArray(teacherResponse)
+  ? teacherResponse
+  : teacherResponse?.data ||
+    teacherResponse?.teachers ||
+    teacherResponse?.users ||
+    [];
   const { data: classes = [] } = useClasses();
 
   const {
@@ -237,47 +244,52 @@ export default function TeacherAssignmentsPage() {
 
           <Stack spacing={2.5}>
             {/* Teacher */}
-            <FormControl
-              fullWidth
-              error={Boolean(errors.teacherId)}
-            >
-              <InputLabel>Teacher</InputLabel>
+          <FormControl
+  fullWidth
+  error={Boolean(errors.teacherId)}
+>
+  <InputLabel>Teacher</InputLabel>
 
-              <Select
-                value={form.teacherId}
-                label="Teacher"
-                onChange={handleTeacherChange}
-                startAdornment={
-                  <PersonOutline
-                    color="action"
-                    sx={{ mr: 1 }}
-                  />
-                }
-              >
-                <MenuItem value="">
-                  <em>Select Teacher</em>
-                </MenuItem>
+  <Select
+    value={form.teacherId}
+    label="Teacher"
+    onChange={handleTeacherChange}
+    startAdornment={
+      <PersonOutline
+        color="action"
+        sx={{ mr: 1 }}
+      />
+    }
+  >
+    <MenuItem value="">
+      <em>Select Teacher</em>
+    </MenuItem>
 
-                {teachers.map((teacher) => (
-                  <MenuItem
-                    key={teacher._id}
-                    value={teacher._id}
-                  >
-                    {teacher.name}{" "}
-                    {teacher.email
-                      ? `(${teacher.email})`
-                      : ""}
-                  </MenuItem>
-                ))}
-              </Select>
+    {teachers.length > 0 ? (
+      teachers.map((teacher) => (
+      <MenuItem
+  key={teacher._id}
+  value={teacher.user?._id || ""}
+>
+          {teacher.user?.name || "Unnamed Teacher"}
+          {teacher.user?.email
+            ? ` (${teacher.user.email})`
+            : ""}
+        </MenuItem>
+      ))
+    ) : (
+      <MenuItem disabled>
+        No teachers found
+      </MenuItem>
+    )}
+  </Select>
 
-              {errors.teacherId && (
-                <FormHelperText>
-                  {errors.teacherId}
-                </FormHelperText>
-              )}
-            </FormControl>
-
+  {errors.teacherId && (
+    <FormHelperText>
+      {errors.teacherId}
+    </FormHelperText>
+  )}
+</FormControl>
             {/* Class */}
             <FormControl
               fullWidth

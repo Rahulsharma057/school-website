@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+
 const documentUpload = require("../middlewares/documentUpload");
 const authMiddleware = require("../middlewares/authMiddleware");
 const allowRoles = require("../middlewares/roleMiddleware");
@@ -9,64 +10,125 @@ const {
   getMyTeacherProfile,
   updateMyTeacherProfile,
   updateTeacherByAdmin,
-  getAllTeachers,uploadTeacherAadhar,
+  getAllTeachers,
+  getTeacherById,
+  uploadTeacherDocument,
   uploadMyTeacherProfilePhoto,
 } = require("../controllers/teacherController");
 
+// ======================================================
+// CREATE TEACHER
+// SUPER_ADMIN / ADMIN / PRINCIPAL
+// ======================================================
+
 router.post(
   "/",
   authMiddleware,
   allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
-  createTeacher
+  createTeacher,
 );
+
+// ======================================================
+// GET MY PROFILE
+// TEACHER ONLY
+// ======================================================
 
 router.get(
   "/my-profile",
   authMiddleware,
   allowRoles("TEACHER"),
-  getMyTeacherProfile
+  getMyTeacherProfile,
 );
 
-// Teacher khud apni profile ke SELF_EDITABLE_FIELDS (phone, profilePhoto,
-// bio, emergencyContact, address) update kar sakta hai.
+// ======================================================
+// UPDATE MY PROFILE
+// TEACHER ONLY
+// Only profilePhoto + bio
+// ======================================================
+
 router.patch(
   "/my-profile",
   authMiddleware,
   allowRoles("TEACHER"),
-  updateMyTeacherProfile
+  updateMyTeacherProfile,
 );
 
-router.get(
-  "/",
-  authMiddleware,
-  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
-  getAllTeachers
-);
+// ======================================================
+// MY PROFILE PHOTO
+// TEACHER ONLY
+// ======================================================
 
-// ==========================
-// UPDATE TEACHER (ADMIN-ONLY FIELDS) — Principal/Admin/SuperAdmin
-// qualification, status, employeeId, joiningDate, experienceYears,
-// subjects, classTeacherOf, leftReason, leftDate
-// ==========================
-router.patch(
-  "/:teacherId",
-  authMiddleware,
-  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
-  updateTeacherByAdmin
-);
-
-router.post(
-  "/:teacherId/aadhar",
-  authMiddleware,
-  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
-  documentUpload.single("file"),
-  uploadTeacherAadhar
-);
 router.post(
   "/me/profile-photo",
   authMiddleware,
   allowRoles("TEACHER"),
   documentUpload.single("file"),
-  uploadMyTeacherProfilePhoto
+  uploadMyTeacherProfilePhoto,
 );
+
+// ======================================================
+// GET ALL TEACHERS
+// SUPER_ADMIN / ADMIN / PRINCIPAL
+// ======================================================
+
+router.get(
+  "/",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+  getAllTeachers,
+);
+
+// ======================================================
+// GET TEACHER BY ID
+// ======================================================
+
+router.get(
+  "/:teacherId",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+  getTeacherById,
+);
+
+// ======================================================
+// UPDATE TEACHER
+// SUPER_ADMIN / ADMIN / PRINCIPAL
+// ======================================================
+
+router.patch(
+  "/:teacherId",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+  updateTeacherByAdmin,
+);
+
+// ======================================================
+// UPLOAD TEACHER DOCUMENT
+// SUPER_ADMIN / ADMIN / PRINCIPAL
+//
+// FormData:
+//
+// file          -> actual file
+//
+// documentType:
+// aadharCard
+// panCard
+// resume
+// degreeCertificates
+// experienceCertificates
+// offerLetter
+// joiningLetter
+// appointmentLetter
+// otherDocuments
+//
+// documentName -> required only for otherDocuments
+// ======================================================
+
+router.post(
+  "/:teacherId/documents",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+  documentUpload.single("file"),
+  uploadTeacherDocument,
+);
+
 module.exports = router;

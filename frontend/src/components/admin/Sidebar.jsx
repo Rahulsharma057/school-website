@@ -400,7 +400,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
     >
       {/* LOGO */}
 
-      <Box
+     {/*  <Box
         sx={{
           height: {
             xs: MOBILE_HEADER_HEIGHT,
@@ -438,9 +438,9 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
             CORE
           </Box>
         </Typography>
-      </Box>
+      </Box> */}
 
-      <Divider />
+      {/* <Divider /> */}
 
       {/* ONLY THIS AREA SCROLLS */}
 
@@ -626,7 +626,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
         >
           {/* LOGO */}
 
-          <Box
+          {/* <Box
             sx={{
               height: DESKTOP_HEADER_HEIGHT,
               minHeight: DESKTOP_HEADER_HEIGHT,
@@ -656,7 +656,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
             </Typography>
           </Box>
 
-          <Divider />
+          <Divider /> */}
 
           {/* DESKTOP SCROLL AREA */}
 

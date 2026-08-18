@@ -4,7 +4,7 @@ const StudentProfile = require("../models/StudentProfile");
 const normalizeDate = require("../utils/normalizeDate");
 const asyncHandler = require("../helpers/asyncHandler");
 const ApiResponse = require("../helpers/ApiResponse");
-
+const { toDateKey, getHolidayDateSet, isNonWorkingDay } = require("../utils/attendanceHelpers");
 // helper — check karo ye teacher is class ke liye authorized hai ya nahi
 const isTeacherAssignedToClass = async (teacherId, classId) => {
   const assignment = await TeacherAssignment.findOne({
@@ -134,48 +134,56 @@ exports.getClassAttendanceReport = asyncHandler(async (req, res) => {
   }
 
   const fromDate = normalizeDate(from);
-
-  // "to" ka pura din include karna hai, isliye end-of-day tak — same
-  // pattern jo getStudentAttendance already use karta hai
   const toDate = new Date(to);
   toDate.setHours(23, 59, 59, 999);
 
-  // Step A: is class ke saare active students (jinke liye report banegi)
   const students = await StudentProfile.find({ class: classId, status: "ACTIVE" })
     .populate("user", "name email")
     .sort({ rollNumber: 1 });
 
-  // Step B: is date-range me is class ki saari attendance docs (ek doc = ek din)
   const attendanceDocs = await Attendance.find({
     class: classId,
     date: { $gte: fromDate, $lte: toDate },
   });
 
-  const totalDaysMarked = attendanceDocs.length;
+  const attendanceByDate = new Map();
+  attendanceDocs.forEach((doc) => attendanceByDate.set(toDateKey(doc.date), doc));
 
-  // Step C: har student ke liye records tally karo across saare din
+  // NEW: holidays in range
+  const holidayDateSet = await getHolidayDateSet(fromDate, toDate);
+
+  // NEW: range ke saare calendar days, taaki jis din doc nahi bana wo bhi check ho sake
+  const allDates = [];
+  for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+    allDates.push(new Date(d));
+  }
+
   const report = students.map((student) => {
     const studentUserId = String(student.user?._id || student.user);
 
-    let present = 0;
-    let absent = 0;
-    let leave = 0;
+    let present = 0, absent = 0, leave = 0;
 
-    attendanceDocs.forEach((doc) => {
-      const record = doc.records.find(
-        (r) => String(r.student) === studentUserId
-      );
+    allDates.forEach((day) => {
+      const doc = attendanceByDate.get(toDateKey(day));
 
-      if (!record) return; // is din is student ka record hi nahi hai (e.g. baad me class join kiya)
+      if (doc) {
+        const record = doc.records.find((r) => String(r.student) === studentUserId);
+        if (!record) return; // us din is student ka record hi nahi
+        if (record.status === "PRESENT") present += 1;
+        else if (record.status === "ABSENT") absent += 1;
+        else if (record.status === "LEAVE") leave += 1;
+        return;
+      }
 
-      if (record.status === "PRESENT") present += 1;
-      else if (record.status === "ABSENT") absent += 1;
-      else if (record.status === "LEAVE") leave += 1;
+      // NEW: attendance mark hi nahi hui — Sunday/Holiday hai to default PRESENT
+      if (isNonWorkingDay(day, holidayDateSet)) {
+        present += 1;
+      }
+      // warna simply skip (working day tha lekin mark hi nahi hui)
     });
 
     const totalMarked = present + absent + leave;
-    const percentage =
-      totalMarked > 0 ? Number(((present / totalMarked) * 100).toFixed(2)) : 0;
+    const percentage = totalMarked > 0 ? Number(((present / totalMarked) * 100).toFixed(2)) : 0;
 
     return {
       student: {
@@ -185,24 +193,19 @@ exports.getClassAttendanceReport = asyncHandler(async (req, res) => {
         email: student.user?.email || "",
         rollNumber: student.rollNumber,
       },
-      present,
-      absent,
-      leave,
-      totalMarked,
-      percentage,
+      present, absent, leave, totalMarked, percentage,
     };
   });
+
+  const totalDaysMarked = attendanceDocs.length;
+  const totalHolidayOrSundayDays = allDates.filter(
+    (d) => !attendanceByDate.has(toDateKey(d)) && isNonWorkingDay(d, holidayDateSet)
+  ).length;
 
   res.json(
     new ApiResponse(
       200,
-      {
-        classId,
-        from: fromDate,
-        to: toDate,
-        totalDaysMarked,
-        report,
-      },
+      { classId, from: fromDate, to: toDate, totalDaysMarked, totalHolidayOrSundayDays, report },
       "Attendance report generated successfully"
     )
   );
@@ -256,30 +259,23 @@ exports.getStudentAttendance = asyncHandler(async (req, res) => {
   const { classId, from, to } = req.query;
 
   if (!studentId) {
-    return res.status(400).json(
-      new ApiResponse(400, null, "Student ID is required")
-    );
+    return res.status(400).json(new ApiResponse(400, null, "Student ID is required"));
   }
 
-  const query = {
-    "records.student": studentId,
-  };
+  const query = { "records.student": studentId };
+  if (classId) query.class = classId;
 
-  if (classId) {
-    query.class = classId;
-  }
-
+  let fromDate, toDate;
   if (from || to) {
     query.date = {};
-
     if (from) {
-      query.date.$gte = normalizeDate(from);
+      fromDate = normalizeDate(from);
+      query.date.$gte = fromDate;
     }
-
     if (to) {
-      const endDate = new Date(to);
-      endDate.setHours(23, 59, 59, 999);
-      query.date.$lte = endDate;
+      toDate = new Date(to);
+      toDate.setHours(23, 59, 59, 999);
+      query.date.$lte = toDate;
     }
   }
 
@@ -289,54 +285,43 @@ exports.getStudentAttendance = asyncHandler(async (req, res) => {
     .populate("class", "className section");
 
   const attendance = [];
+  const recordedDateKeys = new Set();
 
   attendanceDocs.forEach((doc) => {
     const record = doc.records.find(
       (r) => String(r.student?._id || r.student) === String(studentId)
     );
-
     if (record) {
-      attendance.push({
-        date: doc.date,
-        status: record.status,
-        class: doc.class,
-        markedBy: doc.markedBy,
-      });
+      attendance.push({ date: doc.date, status: record.status, class: doc.class, markedBy: doc.markedBy });
+      recordedDateKeys.add(toDateKey(doc.date));
     }
   });
 
-  const presentCount = attendance.filter(
-    (item) => item.status === "PRESENT"
-  ).length;
+  // NEW: dono from & to diye ho to range ke Sunday/Holiday auto-present add karo
+  if (fromDate && toDate) {
+    const holidayDateSet = await getHolidayDateSet(fromDate, toDate);
 
-  const absentCount = attendance.filter(
-    (item) => item.status === "ABSENT"
-  ).length;
+    for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+      const key = toDateKey(d);
+      if (recordedDateKeys.has(key)) continue;
+      if (isNonWorkingDay(d, holidayDateSet)) {
+        attendance.push({ date: new Date(d), status: "PRESENT", class: classId || null, markedBy: null, auto: true });
+      }
+    }
 
-  const leaveCount = attendance.filter(
-    (item) => item.status === "LEAVE"
-  ).length;
+    attendance.sort((a, b) => new Date(a.date) - new Date(b.date));
+  }
 
+  const presentCount = attendance.filter((i) => i.status === "PRESENT").length;
+  const absentCount = attendance.filter((i) => i.status === "ABSENT").length;
+  const leaveCount = attendance.filter((i) => i.status === "LEAVE").length;
   const totalCount = attendance.length;
-
-  const percentage =
-    totalCount > 0
-      ? Number(((presentCount / totalCount) * 100).toFixed(2))
-      : 0;
+  const percentage = totalCount > 0 ? Number(((presentCount / totalCount) * 100).toFixed(2)) : 0;
 
   res.json(
     new ApiResponse(
       200,
-      {
-        attendance,
-        summary: {
-          total: totalCount,
-          present: presentCount,
-          absent: absentCount,
-          leave: leaveCount,
-          percentage,
-        },
-      },
+      { attendance, summary: { total: totalCount, present: presentCount, absent: absentCount, leave: leaveCount, percentage } },
       "Student attendance fetched successfully"
     )
   );

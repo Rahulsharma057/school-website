@@ -47,7 +47,6 @@ import {
 import * as XLSX from "xlsx";
 
 import { useClasses } from "@/hooks/useClasses";
-
 import { useStudentsByClass } from "@/hooks/useStudent";
 
 import {
@@ -76,7 +75,7 @@ const formatDate = (date) => {
 
   return new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", {
     day: "2-digit",
-    month: "2-digit",
+    month: "short",
     year: "numeric",
   });
 };
@@ -108,7 +107,9 @@ export default function AttendancePage() {
 
   const [classId, setClassId] = useState("");
 
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
   const [statusMap, setStatusMap] = useState({});
 
@@ -120,17 +121,24 @@ export default function AttendancePage() {
   // CLASSES
   // ====================================================
 
-  const { data: classes = [], isLoading: classesLoading } = useClasses();
+  const {
+    data: classes = [],
+    isLoading: classesLoading,
+  } = useClasses();
 
   // ====================================================
   // STUDENTS
   // ====================================================
 
   const {
-    data: classStudents = [],
+    data: studentsData,
     isLoading: studentsLoading,
     isFetching: studentsFetching,
   } = useStudentsByClass(classId);
+
+  const classStudents = Array.isArray(studentsData?.students)
+    ? studentsData.students
+    : [];
 
   // ====================================================
   // EXISTING ATTENDANCE
@@ -147,10 +155,15 @@ export default function AttendancePage() {
   // MUTATIONS
   // ====================================================
 
-  const { mutate: markAttendance, isPending: marking } = useMarkAttendance();
+  const {
+    mutate: markAttendance,
+    isPending: marking,
+  } = useMarkAttendance();
 
-  const { mutate: updateAttendance, isPending: updating } =
-    useUpdateAttendance();
+  const {
+    mutate: updateAttendance,
+    isPending: updating,
+  } = useUpdateAttendance();
 
   // ====================================================
   // SELECTED CLASS
@@ -158,7 +171,7 @@ export default function AttendancePage() {
 
   const selectedClass = useMemo(
     () => classes.find((item) => item._id === classId),
-    [classes, classId],
+    [classes, classId]
   );
 
   // ====================================================
@@ -177,13 +190,14 @@ export default function AttendancePage() {
       const studentId = student?.user?._id;
 
       if (studentId) {
-        map[studentId] = "PRESENT";
+        map[studentId] = STATUS.PRESENT;
       }
     });
 
     if (existing?.records?.length) {
       existing.records.forEach((record) => {
-        const studentId = record?.student?._id || record?.student;
+        const studentId =
+          record?.student?._id || record?.student;
 
         if (studentId) {
           map[studentId] = record.status;
@@ -201,7 +215,6 @@ export default function AttendancePage() {
   const handleStatusChange = (studentId, status) => {
     setStatusMap((previous) => ({
       ...previous,
-
       [studentId]: status,
     }));
   };
@@ -216,11 +229,17 @@ export default function AttendancePage() {
     return {
       total: classStudents.length,
 
-      present: values.filter((status) => status === STATUS.PRESENT).length,
+      present: values.filter(
+        (status) => status === STATUS.PRESENT
+      ).length,
 
-      absent: values.filter((status) => status === STATUS.ABSENT).length,
+      absent: values.filter(
+        (status) => status === STATUS.ABSENT
+      ).length,
 
-      leave: values.filter((status) => status === STATUS.LEAVE).length,
+      leave: values.filter(
+        (status) => status === STATUS.LEAVE
+      ).length,
     };
   }, [statusMap, classStudents]);
 
@@ -235,30 +254,33 @@ export default function AttendancePage() {
       const studentId = student?.user?._id;
 
       const name = student?.user?.name || "";
-
       const email = student?.user?.email || "";
-
       const roll = String(student?.rollNumber || "");
 
-      const currentStatus = statusMap[studentId] || STATUS.PRESENT;
+      const currentStatus =
+        statusMap[studentId] || STATUS.PRESENT;
 
-      // SEARCH
       const searchMatched =
         !query ||
         name.toLowerCase().includes(query) ||
         email.toLowerCase().includes(query) ||
         roll.toLowerCase().includes(query);
 
-      // STATUS
       const statusMatched =
-        statusFilter === STATUS.ALL || currentStatus === statusFilter;
+        statusFilter === STATUS.ALL ||
+        currentStatus === statusFilter;
 
       return searchMatched && statusMatched;
     });
-  }, [classStudents, search, statusFilter, statusMap]);
+  }, [
+    classStudents,
+    search,
+    statusFilter,
+    statusMap,
+  ]);
 
   // ====================================================
-  // RESET FILTERS
+  // RESET
   // ====================================================
 
   const clearFilters = () => {
@@ -271,11 +293,7 @@ export default function AttendancePage() {
   // ====================================================
 
   const handleSubmit = () => {
-    if (!classId) {
-      return;
-    }
-
-    if (!classStudents.length) {
+    if (!classId || !classStudents.length) {
       return;
     }
 
@@ -284,8 +302,8 @@ export default function AttendancePage() {
 
       return {
         student: studentId,
-
-        status: statusMap[studentId] || STATUS.PRESENT,
+        status:
+          statusMap[studentId] || STATUS.PRESENT,
       };
     });
 
@@ -311,33 +329,26 @@ export default function AttendancePage() {
   };
 
   // ====================================================
-  // EXCEL - CLASS
+  // EXCEL
   // ====================================================
 
   const downloadClassExcel = () => {
-    if (!classStudents.length) {
-      return;
-    }
+    if (!classStudents.length) return;
 
     const rows = classStudents.map((student, index) => {
       const studentId = student?.user?._id;
 
       return {
         "S.No": index + 1,
-
         "Roll No": student?.rollNumber || "",
-
         "Student Name": student?.user?.name || "",
-
         Email: student?.user?.email || "",
-
         Class: selectedClass?.className || "",
-
         Section: selectedClass?.section || "",
-
         Date: formatDate(date),
-
-        Status: getStatusText(statusMap[studentId] || STATUS.PRESENT),
+        Status: getStatusText(
+          statusMap[studentId] || STATUS.PRESENT
+        ),
       };
     });
 
@@ -356,41 +367,38 @@ export default function AttendancePage() {
 
     const workbook = XLSX.utils.book_new();
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Attendance"
+    );
 
-    const className = selectedClass?.className || "Class";
+    const className =
+      selectedClass?.className || "Class";
 
-    XLSX.writeFile(workbook, `Attendance_${className}_${date}.xlsx`);
+    XLSX.writeFile(
+      workbook,
+      `Attendance_${className}_${date}.xlsx`
+    );
   };
 
-  // ====================================================
-  // EXCEL - FILTERED
-  // ====================================================
-
   const downloadFilteredExcel = () => {
-    if (!filteredStudents.length) {
-      return;
-    }
+    if (!filteredStudents.length) return;
 
     const rows = filteredStudents.map((student, index) => {
       const studentId = student?.user?._id;
 
       return {
         "S.No": index + 1,
-
         "Roll No": student?.rollNumber || "",
-
         "Student Name": student?.user?.name || "",
-
         Email: student?.user?.email || "",
-
         Class: selectedClass?.className || "",
-
         Section: selectedClass?.section || "",
-
         Date: formatDate(date),
-
-        Status: getStatusText(statusMap[studentId] || STATUS.PRESENT),
+        Status: getStatusText(
+          statusMap[studentId] || STATUS.PRESENT
+        ),
       };
     });
 
@@ -409,16 +417,24 @@ export default function AttendancePage() {
 
     const workbook = XLSX.utils.book_new();
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Filtered Attendance");
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Filtered Attendance"
+    );
 
-    XLSX.writeFile(workbook, `Filtered_Attendance_${date}.xlsx`);
+    XLSX.writeFile(
+      workbook,
+      `Filtered_Attendance_${date}.xlsx`
+    );
   };
 
   // ====================================================
   // LOADING
   // ====================================================
 
-  const pageLoading = studentsLoading || attendanceLoading;
+  const pageLoading =
+    studentsLoading || attendanceLoading;
 
   // ====================================================
   // RENDER
@@ -428,318 +444,471 @@ export default function AttendancePage() {
     <Box
       sx={{
         p: {
-          xs: 1.5,
-          sm: 2,
-          md: 3,
+          xs: 1,
+          sm: 1,
+          md: 0.5,
         },
 
         maxWidth: 1600,
-
         mx: "auto",
+
+        bgcolor: "#f8fafc",
+        minHeight: "100vh",
       }}
     >
-      {/* ================================================
-          HEADER
-      ================================================ */}
-
-      <Box
-        sx={{
-          mb: 3,
-
-          display: "flex",
-
-          alignItems: {
-            xs: "flex-start",
-            md: "center",
-          },
-
-          justifyContent: "space-between",
-
-          flexDirection: {
-            xs: "column",
-            md: "row",
-          },
-
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h5"
-            fontWeight={700}
-            sx={{
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Attendance
-          </Typography>
-
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Manage and track daily student attendance
-          </Typography>
-        </Box>
-
-        <Stack
-          direction={{
-            xs: "column",
-            sm: "row",
-          }}
-          spacing={1}
-          width={{
-            xs: "100%",
-            md: "auto",
-          }}
-        >
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={<Download />}
-            onClick={downloadFilteredExcel}
-            disabled={!filteredStudents.length}
-            sx={{
-              textTransform: "none",
-              minWidth: 160,
-            }}
-          >
-            Filtered Excel
-          </Button>
-
-          <Button
-            fullWidth
-            variant="contained"
-            startIcon={<Download />}
-            onClick={downloadClassExcel}
-            disabled={!classStudents.length}
-            sx={{
-              textTransform: "none",
-              minWidth: 160,
-            }}
-          >
-            Download Excel
-          </Button>
-        </Stack>
-      </Box>
-
-      {/* ================================================
-          FILTER PANEL
-      ================================================ */}
+      {/* ==================================================
+          TOP HEADER
+      ================================================== */}
 
       <Paper
         elevation={0}
         sx={{
-          border: "1px solid",
-          borderColor: "divider",
-
-          borderRadius: 2,
-
-          p: {
-            xs: 1.5,
+          px: {
+            xs: 1.25,
+            sm: 1.5,
             md: 2,
           },
 
-          mb: 3,
+          py: {
+            xs: 1,
+            md: 1.25,
+          },
+
+          mb: 1.25,
+
+          borderRadius: 1.5,
+
+          border: "1px solid #e2e8f0",
+
+          bgcolor: "#ffffff",
         }}
       >
-        <Typography fontWeight={600} sx={{ mb: 1.5 }}>
-          Attendance Filters
-        </Typography>
+        <Stack
+          direction={{
+            xs: "column",
+            lg: "row",
+          }}
+          alignItems={{
+            xs: "stretch",
+            lg: "center",
+          }}
+          justifyContent="space-between"
+          spacing={1.25}
+        >
+          {/* TITLE */}
 
-        <Grid container spacing={2}>
-          {/* CLASS */}
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            flexShrink={0}
+          >
+            <Box
+              sx={{
+                width: 34,
+                height: 34,
+                borderRadius: 1,
+                bgcolor: "#ede9fe",
+                color: "#4f1da5",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CheckCircle sx={{ fontSize: 19 }} />
+            </Box>
 
-          <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth size="small">
+            <Box>
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={0.75}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 15,
+                    fontWeight: 800,
+                    color: "#0f172a",
+                  }}
+                >
+                  Attendance
+                </Typography>
+
+                {classId && (
+                  <Chip
+                    size="small"
+                    label={`${counts.total} Students`}
+                    sx={{
+                      height: 21,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      bgcolor: "#f1f5f9",
+                    }}
+                  />
+                )}
+              </Stack>
+
+              <Typography
+                sx={{
+                  fontSize: 10.5,
+                  color: "#64748b",
+                  mt: 0.15,
+                }}
+              >
+                Daily student attendance
+              </Typography>
+            </Box>
+          </Stack>
+
+          {/* ACTIONS */}
+
+          <Stack
+            direction="row"
+            spacing={0.75}
+            justifyContent={{
+              xs: "stretch",
+              lg: "flex-end",
+            }}
+          >
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<Download sx={{ fontSize: 16 }} />}
+              onClick={downloadFilteredExcel}
+              disabled={!filteredStudents.length}
+              sx={{
+                height: 34,
+                px: 1.25,
+                borderRadius: 1,
+                textTransform: "none",
+                fontSize: 11,
+                fontWeight: 700,
+                flex: {
+                  xs: 1,
+                  lg: "unset",
+                },
+              }}
+            >
+              Filtered
+            </Button>
+
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<Download sx={{ fontSize: 16 }} />}
+              onClick={downloadClassExcel}
+              disabled={!classStudents.length}
+              sx={{
+                height: 34,
+                px: 1.25,
+                borderRadius: 1,
+                textTransform: "none",
+                fontSize: 11,
+                fontWeight: 700,
+                boxShadow: "none",
+                flex: {
+                  xs: 1,
+                  lg: "unset",
+                },
+              }}
+            >
+              Excel
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
+
+      {/* ==================================================
+          FILTER BAR
+      ================================================== */}
+
+      <Paper
+        elevation={0}
+        sx={{
+          border: "1px solid #e2e8f0",
+          borderRadius: 1.5,
+          bgcolor: "#fff",
+          mb: 1.25,
+          overflow: "hidden",
+        }}
+      >
+        <Box
+          sx={{
+            p: {
+              xs: 1,
+              md: 1.25,
+            },
+          }}
+        >
+          <Box
+            sx={{
+              display: "grid",
+
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "1fr 150px",
+                md: "190px 145px minmax(220px, 1fr) auto auto",
+              },
+
+              gap: 0.75,
+
+              alignItems: "center",
+            }}
+          >
+            {/* CLASS */}
+
+            <FormControl
+              fullWidth
+              size="small"
+            >
               <Select
                 displayEmpty
                 value={classId}
-                onChange={(e) => setClassId(e.target.value)}
+                onChange={(e) =>
+                  setClassId(e.target.value)
+                }
                 disabled={classesLoading}
+                sx={{
+                  height: 35,
+                  borderRadius: 1,
+                  fontSize: 11,
+                  bgcolor: "#fff",
+                }}
               >
                 <MenuItem value="" disabled>
                   Select Class
                 </MenuItem>
 
                 {classes.map((item) => (
-                  <MenuItem key={item._id} value={item._id}>
-                    {item.className}
-                    {" - "}
+                  <MenuItem
+                    key={item._id}
+                    value={item._id}
+                  >
+                    {item.className} -{" "}
                     {item.section}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </Grid>
 
-          {/* DATE */}
+            {/* DATE */}
 
-          <Grid item xs={12} sm={6} md={3}>
             <TextField
               fullWidth
               size="small"
               type="date"
-              label="Date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) =>
+                setDate(e.target.value)
+              }
               InputLabelProps={{
                 shrink: true,
               }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  height: 35,
+                  borderRadius: 1,
+                  fontSize: 11,
+                },
+              }}
             />
-          </Grid>
 
-          {/* SEARCH */}
+            {/* SEARCH */}
 
-          <Grid item xs={12} md={4}>
             <TextField
               fullWidth
               size="small"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, roll no or email"
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
+              placeholder="Search student, roll no or email..."
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Search fontSize="small" />
+                    <Search
+                      sx={{
+                        fontSize: 17,
+                        color: "#94a3b8",
+                      }}
+                    />
                   </InputAdornment>
                 ),
               }}
-            />
-          </Grid>
-
-          {/* RESET */}
-
-          <Grid item xs={12} md={2}>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<FilterAltOff />}
-              onClick={clearFilters}
-              disabled={!search && statusFilter === STATUS.ALL}
               sx={{
-                height: 40,
+                "& .MuiOutlinedInput-root": {
+                  height: 35,
+                  borderRadius: 1,
+                  fontSize: 11,
+                },
+              }}
+            />
+
+            {/* STATUS */}
+
+            <Box
+              sx={{
+                display: "flex",
+                gap: 0.5,
+                flexWrap: "nowrap",
+                overflowX: "auto",
+              }}
+            >
+              <StatusFilterChip
+                label={`All ${counts.total}`}
+                active={statusFilter === STATUS.ALL}
+                onClick={() =>
+                  setStatusFilter(STATUS.ALL)
+                }
+              />
+
+              <StatusFilterChip
+                label={`Present ${counts.present}`}
+                active={
+                  statusFilter === STATUS.PRESENT
+                }
+                type="success"
+                onClick={() =>
+                  setStatusFilter(STATUS.PRESENT)
+                }
+              />
+
+              <StatusFilterChip
+                label={`Absent ${counts.absent}`}
+                active={
+                  statusFilter === STATUS.ABSENT
+                }
+                type="error"
+                onClick={() =>
+                  setStatusFilter(STATUS.ABSENT)
+                }
+              />
+
+              <StatusFilterChip
+                label={`Leave ${counts.leave}`}
+                active={
+                  statusFilter === STATUS.LEAVE
+                }
+                type="warning"
+                onClick={() =>
+                  setStatusFilter(STATUS.LEAVE)
+                }
+              />
+            </Box>
+
+            {/* CLEAR */}
+
+            <Button
+              size="small"
+              variant="text"
+              startIcon={
+                <FilterAltOff sx={{ fontSize: 15 }} />
+              }
+              onClick={clearFilters}
+              disabled={
+                !search &&
+                statusFilter === STATUS.ALL
+              }
+              sx={{
+                height: 35,
+                px: 1,
+                borderRadius: 1,
                 textTransform: "none",
+                fontSize: 10.5,
+                whiteSpace: "nowrap",
               }}
             >
               Clear
             </Button>
-          </Grid>
-        </Grid>
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* STATUS FILTER */}
-
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          <Chip
-            label={`All (${counts.total})`}
-            clickable
-            color={statusFilter === STATUS.ALL ? "primary" : "default"}
-            onClick={() => setStatusFilter(STATUS.ALL)}
-          />
-
-          <Chip
-            label={`Present (${counts.present})`}
-            clickable
-            color={statusFilter === STATUS.PRESENT ? "success" : "default"}
-            onClick={() => setStatusFilter(STATUS.PRESENT)}
-          />
-
-          <Chip
-            label={`Absent (${counts.absent})`}
-            clickable
-            color={statusFilter === STATUS.ABSENT ? "error" : "default"}
-            onClick={() => setStatusFilter(STATUS.ABSENT)}
-          />
-
-          <Chip
-            label={`Leave (${counts.leave})`}
-            clickable
-            color={statusFilter === STATUS.LEAVE ? "warning" : "default"}
-            onClick={() => setStatusFilter(STATUS.LEAVE)}
-          />
-        </Stack>
+          </Box>
+        </Box>
       </Paper>
 
-      {/* ================================================
+      {/* ==================================================
           SUMMARY
-      ================================================ */}
+      ================================================== */}
 
-      {classId && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={6} md={3}>
+   {/*    {classId && (
+        <Grid
+          container
+          spacing={0.75}
+          sx={{ mb: 1.25 }}
+        >
+          <Grid item xs={6} sm={3}>
             <SummaryCard
-              title="Total Students"
+              title="Total"
               value={counts.total}
               icon={<Person />}
             />
           </Grid>
 
-          <Grid item xs={6} md={3}>
+          <Grid item xs={6} sm={3}>
             <SummaryCard
               title="Present"
               value={counts.present}
               icon={<CheckCircle />}
-              color="success"
+              type="success"
             />
           </Grid>
 
-          <Grid item xs={6} md={3}>
+          <Grid item xs={6} sm={3}>
             <SummaryCard
               title="Absent"
               value={counts.absent}
               icon={<Cancel />}
-              color="error"
+              type="error"
             />
           </Grid>
 
-          <Grid item xs={6} md={3}>
+          <Grid item xs={6} sm={3}>
             <SummaryCard
               title="Leave"
               value={counts.leave}
               icon={<EventBusy />}
-              color="warning"
+              type="warning"
             />
           </Grid>
         </Grid>
-      )}
+      )} */}
 
-      {/* ================================================
+      {/* ==================================================
           NO CLASS
-      ================================================ */}
+      ================================================== */}
 
       {!classId && (
         <Alert
           severity="info"
           sx={{
-            borderRadius: 2,
+            borderRadius: 1.5,
+            py: 0.25,
+            fontSize: 12,
           }}
         >
           Select a class to start managing attendance.
         </Alert>
       )}
 
-      {/* ================================================
+      {/* ==================================================
           LOADING
-      ================================================ */}
+      ================================================== */}
 
       {classId && pageLoading && (
         <Paper
           elevation={0}
           sx={{
-            p: 6,
+            p: 5,
             textAlign: "center",
-
-            border: "1px solid",
-
-            borderColor: "divider",
-
-            borderRadius: 2,
+            border: "1px solid #e2e8f0",
+            borderRadius: 1.5,
+            bgcolor: "#fff",
           }}
         >
-          <CircularProgress />
+          <CircularProgress size={28} />
 
           <Typography
             sx={{
-              mt: 2,
+              mt: 1.5,
+              fontSize: 12,
             }}
             color="text.secondary"
           >
@@ -748,64 +917,108 @@ export default function AttendancePage() {
         </Paper>
       )}
 
-      {/* ================================================
-          STUDENT TABLE
-      ================================================ */}
+      {/* ==================================================
+          TABLE
+      ================================================== */}
 
       {classId && !pageLoading && (
         <Paper
           elevation={0}
           sx={{
-            border: "1px solid",
-
-            borderColor: "divider",
-
-            borderRadius: 2,
-
+            border: "1px solid #e2e8f0",
+            borderRadius: 1.5,
             overflow: "hidden",
+            bgcolor: "#fff",
           }}
         >
-          {/* TABLE HEADER */}
+          {/* TABLE TOP BAR */}
 
           <Box
             sx={{
-              p: 2,
+              px: {
+                xs: 1,
+                md: 1.5,
+              },
+
+              py: 0.85,
 
               display: "flex",
-
+              alignItems: "center",
               justifyContent: "space-between",
 
-              alignItems: "center",
+              gap: 1,
 
-              gap: 2,
-
-              flexWrap: "wrap",
+              borderBottom: "1px solid #e2e8f0",
             }}
           >
-            <Box>
-              <Typography fontWeight={700}>Student Attendance</Typography>
-
-              <Typography variant="body2" color="text.secondary">
-                {selectedClass?.className || "Class"}{" "}
-                {selectedClass?.section ? `- ${selectedClass.section}` : ""} •{" "}
+            <Box
+              sx={{
+                minWidth: 0,
+              }}
+            >
+          {/*     <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 800,
+                  color: "#0f172a",
+                }}
+              >
+                Student Attendance
+              </Typography>
+ */}
+              <Typography
+                sx={{
+                  fontSize: 10.5,
+                  color: "#64748b",
+                  mt: 0.1,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {selectedClass?.className || "Class"}
+                {selectedClass?.section
+                  ? ` - ${selectedClass.section}`
+                  : ""}
+                {" • "}
                 {formatDate(date)}
               </Typography>
             </Box>
 
-            <Stack direction="row" spacing={1}>
+            <Stack
+              direction="row"
+              spacing={0.5}
+              alignItems="center"
+            >
               <Chip
                 size="small"
-                label={`${filteredStudents.length} Students`}
+                label={`${filteredStudents.length} shown`}
+                sx={{
+                  height: 25,
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  bgcolor: "#f1f5f9",
+                }}
               />
 
               <Button
                 size="small"
                 variant="outlined"
-                startIcon={<Refresh />}
+                startIcon={
+                  <Refresh sx={{ fontSize: 15 }} />
+                }
                 onClick={() => refetch()}
-                disabled={attendanceFetching || studentsFetching}
+                disabled={
+                  attendanceFetching ||
+                  studentsFetching
+                }
                 sx={{
+                  height: 29,
+                  minWidth: 0,
+                  px: 1,
+                  borderRadius: 1,
                   textTransform: "none",
+                  fontSize: 10,
                 }}
               >
                 Refresh
@@ -813,23 +1026,28 @@ export default function AttendancePage() {
             </Stack>
           </Box>
 
-          <Divider />
-
           {/* EMPTY */}
 
           {!filteredStudents.length ? (
             <Box
               sx={{
-                p: 6,
+                py: 5,
                 textAlign: "center",
               }}
             >
-              <Typography fontWeight={600}>No students found</Typography>
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                No students found
+              </Typography>
 
               <Typography
-                variant="body2"
-                color="text.secondary"
                 sx={{
+                  fontSize: 11,
+                  color: "#64748b",
                   mt: 0.5,
                 }}
               >
@@ -839,21 +1057,75 @@ export default function AttendancePage() {
           ) : (
             <TableContainer
               sx={{
-                maxHeight: 620,
+                maxHeight: {
+                  xs: "calc(100vh - 390px)",
+                  md: "calc(100vh - 350px)",
+                },
+
+                overflowX: "auto",
               }}
             >
               <Table
                 stickyHeader
                 size="small"
                 sx={{
-                  minWidth: 1050,
+                  minWidth: 900,
+
+                  "& .MuiTableCell-root": {
+                    borderBottom:
+                      "1px solid #eef2f7",
+                  },
                 }}
               >
+                {/* ==================================================
+                    TABLE HEADER
+                ================================================== */}
+
                 <TableHead>
-                  <TableRow>
+                  <TableRow
+                    sx={{
+                      "& th": {
+                        backgroundColor:
+                          "#4f1da5 !important",
+
+                        color:
+                          "#ffffff !important",
+
+                        height: 38,
+
+                        px: 1.25,
+                        py: 0.5,
+
+                        verticalAlign: "middle",
+
+                        borderBottom: "none",
+
+                        fontSize: 10,
+
+                        fontWeight: 800,
+
+                        textTransform:
+                          "uppercase",
+
+                        letterSpacing:
+                          "0.035em",
+
+                        whiteSpace:
+                          "nowrap",
+                      },
+
+                      "& th:first-of-type": {
+                        borderTopLeftRadius: 8,
+                      },
+
+                      "& th:last-of-type": {
+                        borderTopRightRadius: 8,
+                      },
+                    }}
+                  >
                     <TableCell
                       sx={{
-                        fontWeight: 700,
+                        width: 55,
                       }}
                     >
                       S.No
@@ -861,7 +1133,7 @@ export default function AttendancePage() {
 
                     <TableCell
                       sx={{
-                        fontWeight: 700,
+                        width: 90,
                       }}
                     >
                       Roll No
@@ -869,7 +1141,7 @@ export default function AttendancePage() {
 
                     <TableCell
                       sx={{
-                        fontWeight: 700,
+                        width: 190,
                       }}
                     >
                       Student
@@ -877,7 +1149,7 @@ export default function AttendancePage() {
 
                     <TableCell
                       sx={{
-                        fontWeight: 700,
+                        width: 220,
                       }}
                     >
                       Email
@@ -885,20 +1157,24 @@ export default function AttendancePage() {
 
                     <TableCell
                       sx={{
-                        fontWeight: 700,
-                        minWidth: 350,
+                        width: 310,
                       }}
                     >
                       Attendance
                     </TableCell>
 
                     <TableCell
+                      align="center"
                       sx={{
-                        fontWeight: 700,
+                        width: 90,
+
                         position: "sticky",
                         right: 0,
-                        zIndex: 3,
-                        backgroundColor: "background.paper",
+
+                        zIndex: 4,
+
+                        backgroundColor:
+                          "#4f1da5 !important",
                       }}
                     >
                       Action
@@ -906,132 +1182,376 @@ export default function AttendancePage() {
                   </TableRow>
                 </TableHead>
 
+                {/* ==================================================
+                    TABLE BODY
+                ================================================== */}
+
                 <TableBody>
-                  {filteredStudents.map((student, index) => {
-                    const studentId = student?.user?._id;
+                  {filteredStudents.map(
+                    (student, index) => {
+                      const studentId =
+                        student?.user?._id;
 
-                    const currentStatus =
-                      statusMap[studentId] || STATUS.PRESENT;
+                      const currentStatus =
+                        statusMap[studentId] ||
+                        STATUS.PRESENT;
 
-                    return (
-                      <TableRow key={studentId} hover>
-                        <TableCell>{index + 1}</TableCell>
-
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={600}>
-                            {student?.rollNumber || "-"}
-                          </Typography>
-                        </TableCell>
-
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={600}>
-                            {student?.user?.name || "-"}
-                          </Typography>
-                        </TableCell>
-
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {student?.user?.email || "-"}
-                          </Typography>
-                        </TableCell>
-
-                        <TableCell>
-                          <RadioGroup
-                            row
-                            value={currentStatus}
-                            onChange={(e) =>
-                              handleStatusChange(studentId, e.target.value)
-                            }
-                            sx={{
-                              flexWrap: "nowrap",
-                            }}
-                          >
-                            <FormControlLabel
-                              value={STATUS.PRESENT}
-                              control={<Radio size="small" color="success" />}
-                              label={
-                                <Typography variant="body2">Present</Typography>
-                              }
-                            />
-
-                            <FormControlLabel
-                              value={STATUS.ABSENT}
-                              control={<Radio size="small" color="error" />}
-                              label={
-                                <Typography variant="body2">Absent</Typography>
-                              }
-                            />
-
-                            <FormControlLabel
-                              value={STATUS.LEAVE}
-                              control={<Radio size="small" color="warning" />}
-                              label={
-                                <Typography variant="body2">Leave</Typography>
-                              }
-                            />
-                          </RadioGroup>
-                        </TableCell>
-
-                        <TableCell
+                      return (
+                        <TableRow
+                          key={studentId}
+                          hover
                           sx={{
-                            position: "sticky",
-                            right: 0,
-                            backgroundColor: "background.paper",
-                            zIndex: 1,
+                            height: 47,
+
+                            "&:hover": {
+                              bgcolor:
+                                "#f8fafc",
+                            },
                           }}
                         >
-                          <StudentAttendanceDownload
-                            student={student}
-                            classId={classId}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                          {/* S.NO */}
+
+                          <TableCell
+                            sx={{
+                              px: 1.25,
+                              py: 0.5,
+                              fontSize: 11,
+                              color: "#64748b",
+                            }}
+                          >
+                            {index + 1}
+                          </TableCell>
+
+                          {/* ROLL */}
+
+                          <TableCell
+                            sx={{
+                              px: 1.25,
+                              py: 0.5,
+                            }}
+                          >
+                            <Typography
+                              sx={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "#334155",
+                              }}
+                            >
+                              {student?.rollNumber ||
+                                "-"}
+                            </Typography>
+                          </TableCell>
+
+                          {/* STUDENT */}
+
+                          <TableCell
+                            sx={{
+                              px: 1.25,
+                              py: 0.5,
+                            }}
+                          >
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              spacing={0.75}
+                              sx={{
+                                minWidth: 0,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius:
+                                    "50%",
+                                  bgcolor:
+                                    "#ede9fe",
+                                  color:
+                                    "#4f1da5",
+                                  display:
+                                    "flex",
+                                  alignItems:
+                                    "center",
+                                  justifyContent:
+                                    "center",
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {(
+                                  student?.user
+                                    ?.name ||
+                                  "S"
+                                )
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </Box>
+
+                              <Typography
+                                sx={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color:
+                                    "#0f172a",
+
+                                  overflow:
+                                    "hidden",
+
+                                  textOverflow:
+                                    "ellipsis",
+
+                                  whiteSpace:
+                                    "nowrap",
+                                }}
+                              >
+                                {student?.user
+                                  ?.name || "-"}
+                              </Typography>
+                            </Stack>
+                          </TableCell>
+
+                          {/* EMAIL */}
+
+                          <TableCell
+                            sx={{
+                              px: 1.25,
+                              py: 0.5,
+                            }}
+                          >
+                            <Typography
+                              sx={{
+                                fontSize: 10.5,
+                                color: "#64748b",
+
+                                overflow:
+                                  "hidden",
+
+                                textOverflow:
+                                  "ellipsis",
+
+                                whiteSpace:
+                                  "nowrap",
+                              }}
+                            >
+                              {student?.user
+                                ?.email || "-"}
+                            </Typography>
+                          </TableCell>
+
+                          {/* ATTENDANCE */}
+
+                          <TableCell
+                            sx={{
+                              px: 1,
+                              py: 0.5,
+                            }}
+                          >
+                            <RadioGroup
+                              row
+                              value={
+                                currentStatus
+                              }
+                              onChange={(e) =>
+                                handleStatusChange(
+                                  studentId,
+                                  e.target.value
+                                )
+                              }
+                              sx={{
+                                flexWrap:
+                                  "nowrap",
+                                gap: 0.25,
+                              }}
+                            >
+                              <AttendanceRadio
+                                value={
+                                  STATUS.PRESENT
+                                }
+                                label="Present"
+                                color="success"
+                                selected={
+                                  currentStatus ===
+                                  STATUS.PRESENT
+                                }
+                              />
+
+                              <AttendanceRadio
+                                value={
+                                  STATUS.ABSENT
+                                }
+                                label="Absent"
+                                color="error"
+                                selected={
+                                  currentStatus ===
+                                  STATUS.ABSENT
+                                }
+                              />
+
+                              <AttendanceRadio
+                                value={
+                                  STATUS.LEAVE
+                                }
+                                label="Leave"
+                                color="warning"
+                                selected={
+                                  currentStatus ===
+                                  STATUS.LEAVE
+                                }
+                              />
+                            </RadioGroup>
+                          </TableCell>
+
+                          {/* ACTION */}
+
+                          <TableCell
+                            align="center"
+                            sx={{
+                              px: 0.75,
+                              py: 0.5,
+
+                              position: "sticky",
+                              right: 0,
+
+                              backgroundColor:
+                                "#ffffff",
+
+                              zIndex: 2,
+
+                              boxShadow:
+                                "-3px 0 6px rgba(15,23,42,0.04)",
+                            }}
+                          >
+                            <StudentAttendanceDownload
+                              student={student}
+                              classId={classId}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
 
-          {/* =========================================
-                SAVE BAR
-            ========================================= */}
+          {/* ==================================================
+              SAVE BAR
+          ================================================== */}
 
           {classStudents.length > 0 && (
             <Box
               sx={{
-                p: 2,
+                px: {
+                  xs: 1,
+                  md: 1.5,
+                },
 
-                borderTop: "1px solid",
+                py: 0.75,
 
-                borderColor: "divider",
+                borderTop:
+                  "1px solid #e2e8f0",
 
                 display: "flex",
 
-                justifyContent: "flex-end",
+                alignItems: "center",
 
-                backgroundColor: "background.paper",
+                justifyContent:
+                  "space-between",
+
+                gap: 1,
+
+                backgroundColor:
+                  "#ffffff",
 
                 position: "sticky",
-
                 bottom: 0,
 
-                zIndex: 4,
+                zIndex: 5,
               }}
             >
+              {/* STATUS INFO */}
+
+              <Stack
+                direction="row"
+                spacing={0.5}
+                alignItems="center"
+              >
+                <Chip
+                  size="small"
+                  label={`P ${counts.present}`}
+                  sx={{
+                    height: 24,
+                    fontSize: 9.5,
+                    fontWeight: 800,
+                    color: "#15803d",
+                    bgcolor: "#f0fdf4",
+                  }}
+                />
+
+                <Chip
+                  size="small"
+                  label={`A ${counts.absent}`}
+                  sx={{
+                    height: 24,
+                    fontSize: 9.5,
+                    fontWeight: 800,
+                    color: "#dc2626",
+                    bgcolor: "#fef2f2",
+                  }}
+                />
+
+                <Chip
+                  size="small"
+                  label={`L ${counts.leave}`}
+                  sx={{
+                    height: 24,
+                    fontSize: 9.5,
+                    fontWeight: 800,
+                    color: "#d97706",
+                    bgcolor: "#fffbeb",
+                  }}
+                />
+              </Stack>
+
+              {/* SAVE */}
+
               <Button
                 variant="contained"
-                size="large"
+                size="small"
                 onClick={handleSubmit}
                 disabled={marking || updating}
                 sx={{
-                  minWidth: 180,
+                  height: 32,
+                  minWidth: {
+                    xs: 135,
+                    sm: 160,
+                  },
+
+                  px: 1.5,
+
+                  borderRadius: 1,
+
                   textTransform: "none",
+
+                  fontSize: 11,
+
+                  fontWeight: 800,
+
+                  boxShadow: "none",
                 }}
               >
                 {marking || updating ? (
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <CircularProgress size={18} color="inherit" />
+                  <Stack
+                    direction="row"
+                    spacing={0.75}
+                    alignItems="center"
+                  >
+                    <CircularProgress
+                      size={15}
+                      color="inherit"
+                    />
 
                     <span>Saving...</span>
                   </Stack>
@@ -1050,34 +1570,249 @@ export default function AttendancePage() {
 }
 
 // ======================================================
+// STATUS FILTER CHIP
+// ======================================================
+
+function StatusFilterChip({
+  label,
+  active,
+  type,
+  onClick,
+}) {
+  const colors = {
+    success: {
+      bg: "#f0fdf4",
+      color: "#15803d",
+    },
+
+    error: {
+      bg: "#fef2f2",
+      color: "#dc2626",
+    },
+
+    warning: {
+      bg: "#fffbeb",
+      color: "#d97706",
+    },
+
+    default: {
+      bg: "#f1f5f9",
+      color: "#475569",
+    },
+  };
+
+  const selected =
+    type && active
+      ? colors[type]
+      : active
+        ? {
+            bg: "#ede9fe",
+            color: "#4f1da5",
+          }
+        : colors.default;
+
+  return (
+    <Chip
+      clickable
+      size="small"
+      label={label}
+      onClick={onClick}
+      sx={{
+        height: 32,
+
+        borderRadius: 1,
+
+        fontSize: 9.5,
+
+        fontWeight: 800,
+
+        bgcolor: selected.bg,
+
+        color: selected.color,
+
+        border: active
+          ? `1px solid ${selected.color}30`
+          : "1px solid transparent",
+
+        whiteSpace: "nowrap",
+
+        "&:hover": {
+          bgcolor: selected.bg,
+        },
+      }}
+    />
+  );
+}
+
+// ======================================================
+// ATTENDANCE RADIO
+// ======================================================
+
+function AttendanceRadio({
+  value,
+  label,
+  color,
+  selected,
+}) {
+  const styles = {
+    success: {
+      bg: "#f0fdf4",
+      border: "#bbf7d0",
+      text: "#15803d",
+    },
+
+    error: {
+      bg: "#fef2f2",
+      border: "#fecaca",
+      text: "#dc2626",
+    },
+
+    warning: {
+      bg: "#fffbeb",
+      border: "#fde68a",
+      text: "#d97706",
+    },
+  };
+
+  const style = styles[color];
+
+  return (
+    <FormControlLabel
+      value={value}
+      control={
+        <Radio
+          size="small"
+          color={color}
+          sx={{
+            p: 0.35,
+            display: "none",
+          }}
+        />
+      }
+      label={
+        <Box
+          sx={{
+            height: 29,
+
+            px: 1,
+
+            display: "flex",
+
+            alignItems: "center",
+
+            justifyContent: "center",
+
+            borderRadius: 1,
+
+            border: `1px solid ${
+              selected
+                ? style.border
+                : "#e2e8f0"
+            }`,
+
+            bgcolor: selected
+              ? style.bg
+              : "#ffffff",
+
+            color: selected
+              ? style.text
+              : "#64748b",
+
+            fontSize: 10,
+
+            fontWeight: selected
+              ? 800
+              : 600,
+
+            cursor: "pointer",
+
+            transition:
+              "all .15s ease",
+
+            whiteSpace: "nowrap",
+
+            "&:hover": {
+              bgcolor: style.bg,
+              borderColor:
+                style.border,
+            },
+          }}
+        >
+          {label}
+        </Box>
+      }
+      sx={{
+        m: 0,
+
+        "& .MuiFormControlLabel-label":
+          {
+            lineHeight: 1,
+          },
+      }}
+    />
+  );
+}
+
+// ======================================================
 // SUMMARY CARD
 // ======================================================
 
-function SummaryCard({ title, value, icon, color }) {
+function SummaryCard({
+  title,
+  value,
+  icon,
+  type,
+}) {
+  const styles = {
+    success: {
+      bg: "#f0fdf4",
+      color: "#16a34a",
+    },
+
+    error: {
+      bg: "#fef2f2",
+      color: "#dc2626",
+    },
+
+    warning: {
+      bg: "#fffbeb",
+      color: "#d97706",
+    },
+
+    default: {
+      bg: "#f8fafc",
+      color: "#4f1da5",
+    },
+  };
+
+  const style =
+    styles[type || "default"];
+
   return (
     <Card
       elevation={0}
       sx={{
+        border:
+          "1px solid #e2e8f0",
+
+        borderRadius: 1.5,
+
         height: "100%",
 
-        border: "1px solid",
-
-        borderColor: "divider",
-
-        borderRadius: 2,
+        bgcolor: "#ffffff",
       }}
     >
       <CardContent
         sx={{
           p: {
-            xs: 1.5,
-            md: 2,
+            xs: 1,
+            md: 1.15,
           },
 
           "&:last-child": {
             pb: {
-              xs: 1.5,
-              md: 2,
+              xs: 1,
+              md: 1.15,
             },
           },
         }}
@@ -1086,18 +1821,26 @@ function SummaryCard({ title, value, icon, color }) {
           direction="row"
           alignItems="center"
           justifyContent="space-between"
-          gap={1}
+          spacing={1}
         >
           <Box>
-            <Typography variant="body2" color="text.secondary" noWrap>
+            <Typography
+              sx={{
+                fontSize: 10,
+                color: "#64748b",
+                fontWeight: 600,
+              }}
+            >
               {title}
             </Typography>
 
             <Typography
-              variant="h5"
-              fontWeight={700}
               sx={{
-                mt: 0.5,
+                fontSize: 18,
+                lineHeight: 1.1,
+                mt: 0.35,
+                fontWeight: 800,
+                color: "#0f172a",
               }}
             >
               {value}
@@ -1106,10 +1849,10 @@ function SummaryCard({ title, value, icon, color }) {
 
           <Box
             sx={{
-              width: 42,
-              height: 42,
+              width: 32,
+              height: 32,
 
-              borderRadius: "50%",
+              borderRadius: 1,
 
               display: "flex",
 
@@ -1117,11 +1860,15 @@ function SummaryCard({ title, value, icon, color }) {
 
               justifyContent: "center",
 
-              color: color ? `${color}.main` : "primary.main",
+              color: style.color,
 
-              backgroundColor: color ? `${color}.lighter` : "action.hover",
+              bgcolor: style.bg,
 
               flexShrink: 0,
+
+              "& svg": {
+                fontSize: 17,
+              },
             }}
           >
             {icon}

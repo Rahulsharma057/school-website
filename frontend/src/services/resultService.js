@@ -11,3 +11,8 @@ export const getMyResults = () => {
 export const getClassResults = (examId) => {
   return api.get(`/results/exam/${examId}`);
 };
+
+export const downloadResultTemplate = (examId) =>
+  api.get(`/results/template/${examId}`, { responseType: "blob" });
+
+export const bulkEnterResults = (data) => api.post("/results/bulk", data);

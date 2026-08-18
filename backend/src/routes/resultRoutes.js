@@ -8,6 +8,8 @@ const {
   enterResult,
   getMyResults,
   getClassResults,
+  downloadResultTemplate,
+  bulkEnterResults,
 } = require("../controllers/resultController");
 
 router.post(
@@ -24,6 +26,20 @@ router.get(
   authMiddleware,
   allowRoles("TEACHER", "SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
   getClassResults
+);
+
+router.get(
+  "/template/:examId",
+  authMiddleware,
+  allowRoles("TEACHER", "SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+  downloadResultTemplate
+);
+
+router.post(
+  "/bulk",
+  authMiddleware,
+  allowRoles("TEACHER", "SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+  bulkEnterResults
 );
 
 module.exports = router;

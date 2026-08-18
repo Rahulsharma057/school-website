@@ -1,32 +1,80 @@
 import api from "./api";
 
+// ======================================================
+// CREATE TEACHER
+// ======================================================
+
 export const createTeacher = (data) => {
   return api.post("/teachers", data);
 };
+
+// ======================================================
+// MY PROFILE
+// ======================================================
 
 export const getMyTeacherProfile = () => {
   return api.get("/teachers/my-profile");
 };
 
+// ======================================================
+// ALL TEACHERS
+// ======================================================
+
 export const getAllTeachers = () => {
   return api.get("/teachers");
 };
 
-// TEACHER — apni profile update
-export const updateMyTeacherProfile = (data) =>
-  api.patch("/teachers/my-profile", data);
+// ======================================================
+// GET TEACHER BY ID
+// ======================================================
 
-// TEACHER — apni profile photo upload
-// NOTE: route is /teachers/me/profile-photo (matches backend router),
-// and Content-Type header is NOT set manually — same reason as in
-// studentService.js (FormData needs its own auto-generated boundary).
-export const uploadMyTeacherProfilePhoto = (formData) =>
-  api.post("/teachers/me/profile-photo", formData);
+export const getTeacherById = (teacherId) => {
+  return api.get(`/teachers/${teacherId}`);
+};
 
-// ADMIN — kisi bhi teacher ki admin-only fields update karo
-export const updateTeacherByAdmin = (teacherId, data) =>
-  api.patch(`/teachers/${teacherId}`, data);
+// ======================================================
+// TEACHER SELF UPDATE
+// ======================================================
 
-// ADMIN — Aadhar card upload
-export const uploadTeacherAadhar = (teacherId, formData) =>
-  api.post(`/teachers/${teacherId}/aadhar`, formData);
+export const updateMyTeacherProfile = (data) => {
+  return api.patch("/teachers/my-profile", data);
+};
+
+// ======================================================
+// TEACHER PROFILE PHOTO
+// ======================================================
+
+export const uploadMyTeacherProfilePhoto = (formData) => {
+  return api.post(
+    "/teachers/me/profile-photo",
+    formData
+  );
+};
+
+// ======================================================
+// ADMIN UPDATE
+// ======================================================
+
+export const updateTeacherByAdmin = (
+  teacherId,
+  data
+) => {
+  return api.patch(
+    `/teachers/${teacherId}`,
+    data
+  );
+};
+
+// ======================================================
+// ADMIN DOCUMENT UPLOAD
+// ======================================================
+
+export const uploadTeacherDocument = (
+  teacherId,
+  formData
+) => {
+  return api.post(
+    `/teachers/${teacherId}/documents`,
+    formData
+  );
+};

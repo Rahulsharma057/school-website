@@ -133,7 +133,15 @@ export function useMyAttendance() {
     queryFn: async () => {
       const res = await getMyAttendance();
 
-      return res.data.data;
+      const data = res?.data?.data;
+
+      return {
+        presentCount: Number(data?.presentCount ?? 0),
+        totalCount: Number(data?.totalCount ?? 0),
+        attendance: Array.isArray(data?.attendance)
+          ? data.attendance
+          : [],
+      };
     },
 
     staleTime: 1000 * 60 * 5,
