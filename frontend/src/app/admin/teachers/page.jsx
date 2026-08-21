@@ -50,6 +50,8 @@ import {
   UploadFileOutlined,
   AccountBalanceOutlined,
   ContactEmergencyOutlined,
+  DeleteOutline,
+  DescriptionOutlined,
 } from "@mui/icons-material";
 
 import GroupsIcon from "@mui/icons-material/Groups";
@@ -59,6 +61,7 @@ import {
   useAllTeachers,
   useUpdateTeacherByAdmin,
   useUploadTeacherDocument,
+  useDeleteTeacherDocument,
 } from "@/hooks/useTeacher";
 
 // ======================================================
@@ -106,8 +109,19 @@ const emptyForm = {
   ifsc: "",
   bankName: "",
   accountHolderName: "",
+
+  // FIX: new — see getFormFromTeacher/getPayload/edit-dialog notes below.
+  status: "ACTIVE",
 };
 
+// FIX: values here previously did NOT match the backend's
+// ALLOWED_DOCUMENTS list (teacherController.js) at all:
+//   "degreeCertificate"     -> backend expects "degreeCertificates"
+//   "experienceCertificate" -> backend expects "experienceCertificates"
+//   "other"                 -> backend expects "otherDocuments"
+// Every upload using one of those three types would have failed with
+// "Invalid document type" from the backend, because the value sent
+// literally isn't in the allowed list. Values below now match exactly.
 const documentTypes = [
   {
     value: "aadharCard",
@@ -122,11 +136,11 @@ const documentTypes = [
     label: "Resume",
   },
   {
-    value: "degreeCertificate",
+    value: "degreeCertificates",
     label: "Degree Certificate",
   },
   {
-    value: "experienceCertificate",
+    value: "experienceCertificates",
     label: "Experience Certificate",
   },
   {
@@ -142,10 +156,83 @@ const documentTypes = [
     label: "Appointment Letter",
   },
   {
-    value: "other",
+    value: "otherDocuments",
     label: "Other",
   },
 ];
+
+const ARRAY_DOCUMENT_TYPES = [
+  "degreeCertificates",
+  "experienceCertificates",
+  "otherDocuments",
+];
+
+const SINGLE_DOC_LABELS = {
+  aadharCard: "Aadhar Card",
+  panCard: "PAN Card",
+  resume: "Resume",
+  offerLetter: "Offer Letter",
+  joiningLetter: "Joining Letter",
+  appointmentLetter: "Appointment Letter",
+};
+
+// FIX: new helper — needed so the document dialog can actually list and
+// delete a teacher's existing documents (see below). TeacherProfile's
+// `documents` field is an object with named single-doc slots plus a few
+// array slots, not a flat array, so it needs flattening the same way
+// ProfilePage.jsx's self-service view does.
+function flattenTeacherDocuments(documents) {
+  if (!documents) return [];
+
+  const items = [];
+
+  for (const [key, label] of Object.entries(SINGLE_DOC_LABELS)) {
+    const doc = documents[key];
+    if (doc?.url) {
+      items.push({
+        documentType: key,
+        documentId: null,
+        url: doc.url,
+        title: label,
+      });
+    }
+  }
+
+  (documents.degreeCertificates || []).forEach((doc) => {
+    if (doc?.url) {
+      items.push({
+        documentType: "degreeCertificates",
+        documentId: doc._id,
+        url: doc.url,
+        title: "Degree Certificate",
+      });
+    }
+  });
+
+  (documents.experienceCertificates || []).forEach((doc) => {
+    if (doc?.url) {
+      items.push({
+        documentType: "experienceCertificates",
+        documentId: doc._id,
+        url: doc.url,
+        title: "Experience Certificate",
+      });
+    }
+  });
+
+  (documents.otherDocuments || []).forEach((doc) => {
+    if (doc?.url) {
+      items.push({
+        documentType: "otherDocuments",
+        documentId: doc._id,
+        url: doc.url,
+        title: doc.name || "Other Document",
+      });
+    }
+  });
+
+  return items;
+}
 
 // ======================================================
 // HELPERS
@@ -153,100 +240,79 @@ const documentTypes = [
 
 function getFormFromTeacher(teacher) {
   const address = teacher?.address || {};
-  const emergency =
-    teacher?.emergencyContact || {};
+  const emergency = teacher?.emergencyContact || {};
 
   return {
     name: teacher?.user?.name || "",
     email: teacher?.user?.email || "",
     password: "",
 
-    qualification:
-      teacher?.qualification || "",
+    qualification: teacher?.qualification || "",
 
-    specialization:
-      teacher?.specialization || "",
+    specialization: teacher?.specialization || "",
 
-    employmentType:
-      teacher?.employmentType ||
-      "FULL_TIME",
+    employmentType: teacher?.employmentType || "FULL_TIME",
 
-    previousInstitutions: Array.isArray(
-      teacher?.previousInstitutions
-    )
+    previousInstitutions: Array.isArray(teacher?.previousInstitutions)
       ? teacher.previousInstitutions.join(", ")
       : "",
 
     phone: teacher?.phone || "",
-    alternatePhone:
-      teacher?.alternatePhone || "",
+    alternatePhone: teacher?.alternatePhone || "",
 
-    personalEmail:
-      teacher?.personalEmail || "",
+    personalEmail: teacher?.personalEmail || "",
 
     street: address.street || "",
     city: address.city || "",
     state: address.state || "",
     pincode: address.pincode || "",
 
-    emergencyName:
-      emergency.name || "",
+    emergencyName: emergency.name || "",
 
-    emergencyPhone:
-      emergency.phone || "",
+    emergencyPhone: emergency.phone || "",
 
-    emergencyRelation:
-      emergency.relation || "",
+    emergencyRelation: emergency.relation || "",
 
-    employeeId:
-      teacher?.employeeId || "",
+    employeeId: teacher?.employeeId || "",
 
     joiningDate: teacher?.joiningDate
       ? teacher.joiningDate.substring(0, 10)
       : "",
 
-    experienceYears:
-      teacher?.experienceYears ?? "",
+    experienceYears: teacher?.experienceYears ?? "",
 
-    aadharNumber:
-      teacher?.aadharNumber || "",
+    aadharNumber: teacher?.aadharNumber || "",
 
-    panNumber:
-      teacher?.panNumber || "",
+    panNumber: teacher?.panNumber || "",
 
-    nationality:
-      teacher?.nationality || "Indian",
+    nationality: teacher?.nationality || "Indian",
 
-    category:
-      teacher?.category || "",
+    category: teacher?.category || "",
 
-    religion:
-      teacher?.religion || "",
+    religion: teacher?.religion || "",
 
     dateOfBirth: teacher?.dateOfBirth
       ? teacher.dateOfBirth.substring(0, 10)
       : "",
 
-    gender:
-      teacher?.gender || "",
+    gender: teacher?.gender || "",
 
-    bloodGroup:
-      teacher?.bloodGroup || "",
+    bloodGroup: teacher?.bloodGroup || "",
 
-    maritalStatus:
-      teacher?.maritalStatus || "",
+    maritalStatus: teacher?.maritalStatus || "",
 
-    bankAccount:
-      teacher?.bankAccount || "",
+    bankAccount: teacher?.bankAccount || "",
 
-    ifsc:
-      teacher?.ifsc || "",
+    ifsc: teacher?.ifsc || "",
 
-    bankName:
-      teacher?.bankName || "",
+    bankName: teacher?.bankName || "",
 
-    accountHolderName:
-      teacher?.accountHolderName || "",
+    accountHolderName: teacher?.accountHolderName || "",
+
+    // FIX: new — previously the edit dialog had no way to change a
+    // teacher's status at all, even though the backend (updateTeacherByAdmin)
+    // fully supports it — including syncing the teacher's login on/off.
+    status: teacher?.status || "ACTIVE",
   };
 }
 
@@ -255,30 +321,24 @@ function getPayload(form, isEdit = false) {
     name: form.name.trim(),
     email: form.email.trim(),
 
-    qualification:
-      form.qualification.trim(),
+    qualification: form.qualification.trim(),
 
-    specialization:
-      form.specialization.trim(),
+    specialization: form.specialization.trim(),
 
-    employmentType:
-      form.employmentType,
+    employmentType: form.employmentType,
 
-    previousInstitutions:
-      form.previousInstitutions
-        ? form.previousInstitutions
-            .split(",")
-            .map((x) => x.trim())
-            .filter(Boolean)
-        : [],
+    previousInstitutions: form.previousInstitutions
+      ? form.previousInstitutions
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean)
+      : [],
 
     phone: form.phone.trim(),
 
-    alternatePhone:
-      form.alternatePhone.trim(),
+    alternatePhone: form.alternatePhone.trim(),
 
-    personalEmail:
-      form.personalEmail.trim(),
+    personalEmail: form.personalEmail.trim(),
 
     address: {
       street: form.street.trim(),
@@ -290,64 +350,53 @@ function getPayload(form, isEdit = false) {
     emergencyContact: {
       name: form.emergencyName.trim(),
       phone: form.emergencyPhone.trim(),
-      relation:
-        form.emergencyRelation.trim(),
+      relation: form.emergencyRelation.trim(),
     },
 
-    employeeId:
-      form.employeeId.trim(),
+    employeeId: form.employeeId.trim(),
 
-    joiningDate:
-      form.joiningDate || null,
+    joiningDate: form.joiningDate || null,
 
     experienceYears:
-      form.experienceYears === ""
-        ? 0
-        : Number(form.experienceYears),
+      form.experienceYears === "" ? 0 : Number(form.experienceYears),
 
-    aadharNumber:
-      form.aadharNumber.trim(),
+    aadharNumber: form.aadharNumber.trim(),
 
-    panNumber:
-      form.panNumber.trim(),
+    panNumber: form.panNumber.trim(),
 
-    nationality:
-      form.nationality.trim(),
+    nationality: form.nationality.trim(),
 
-    category:
-      form.category,
+    category: form.category,
 
-    religion:
-      form.religion.trim(),
+    religion: form.religion.trim(),
 
-    dateOfBirth:
-      form.dateOfBirth || null,
+    dateOfBirth: form.dateOfBirth || null,
 
-    gender:
-      form.gender,
+    gender: form.gender,
 
-    bloodGroup:
-      form.bloodGroup,
+    bloodGroup: form.bloodGroup,
 
-    maritalStatus:
-      form.maritalStatus,
+    maritalStatus: form.maritalStatus,
 
-    bankAccount:
-      form.bankAccount.trim(),
+    bankAccount: form.bankAccount.trim(),
 
-    ifsc:
-      form.ifsc.trim(),
+    ifsc: form.ifsc.trim(),
 
-    bankName:
-      form.bankName.trim(),
+    bankName: form.bankName.trim(),
 
-    accountHolderName:
-      form.accountHolderName.trim(),
+    accountHolderName: form.accountHolderName.trim(),
   };
 
   // Password only while creating.
   if (!isEdit && form.password) {
     payload.password = form.password;
+  }
+
+  // FIX: status is admin-editable server-side (ADMIN_ONLY_FIELDS) but
+  // only makes sense to send on edit — createTeacher always forces
+  // status to ACTIVE server-side regardless of what's sent.
+  if (isEdit) {
+    payload.status = form.status;
   }
 
   return payload;
@@ -357,15 +406,7 @@ function getPayload(form, isEdit = false) {
 // FIELD COMPONENT
 // ======================================================
 
-function Field({
-  label,
-  name,
-  value,
-  onChange,
-  icon,
-  type = "text",
-  ...props
-}) {
+function Field({ label, name, value, onChange, icon, type = "text", ...props }) {
   return (
     <TextField
       fullWidth
@@ -374,18 +415,12 @@ function Field({
       value={value}
       onChange={onChange}
       type={type}
-      InputLabelProps={
-        type === "date"
-          ? { shrink: true }
-          : undefined
-      }
+      InputLabelProps={type === "date" ? { shrink: true } : undefined}
       InputProps={
         icon
           ? {
               startAdornment: (
-                <InputAdornment position="start">
-                  {icon}
-                </InputAdornment>
+                <InputAdornment position="start">{icon}</InputAdornment>
               ),
             }
           : undefined
@@ -400,59 +435,56 @@ function Field({
 // ======================================================
 
 export default function TeachersPage() {
-  const {
-    mutate: createTeacher,
-    isPending: creating,
-  } = useCreateTeacher();
+  const { mutate: createTeacher, isPending: creating } = useCreateTeacher();
 
-  const {
-    data: teachers = [],
-    isLoading,
-  } = useAllTeachers();
+  const { data: teachers = [], isLoading } = useAllTeachers();
 
-  const {
-    mutate: updateTeacher,
-    isPending: updating,
-  } = useUpdateTeacherByAdmin();
+  const { mutate: updateTeacher, isPending: updating } =
+    useUpdateTeacherByAdmin();
 
-  const {
-    mutate: uploadDocument,
-    isPending: uploading,
-  } = useUploadTeacherDocument();
+  const { mutate: uploadDocument, isPending: uploading } =
+    useUploadTeacherDocument();
 
-  const [form, setForm] =
-    useState(emptyForm);
+  // FIX: new — wires up the delete-document endpoint/hook that previously
+  // had nothing calling it anywhere in the UI.
+  const { mutate: deleteDocument, isPending: deletingDocument } =
+    useDeleteTeacherDocument();
 
-  const [errors, setErrors] =
-    useState({});
+  const [form, setForm] = useState(emptyForm);
 
-  const [viewTeacher, setViewTeacher] =
-    useState(null);
+  const [errors, setErrors] = useState({});
 
-  const [editTeacher, setEditTeacher] =
-    useState(null);
+  const [viewTeacher, setViewTeacher] = useState(null);
 
-  const [documentTeacher, setDocumentTeacher] =
-    useState(null);
+  const [editTeacher, setEditTeacher] = useState(null);
 
-  const [documentType, setDocumentType] =
-    useState("aadharCard");
+  const [documentTeacher, setDocumentTeacher] = useState(null);
 
-  const [documentFile, setDocumentFile] =
-    useState(null);
+  const [documentType, setDocumentType] = useState("aadharCard");
 
-  const [documentName, setDocumentName] =
-    useState("");
+  const [documentFile, setDocumentFile] = useState(null);
+
+  const [documentName, setDocumentName] = useState("");
+
+  // FIX: documentTeacher is a snapshot captured at click-time, so after a
+  // successful upload/delete it wouldn't reflect the change until the
+  // dialog was closed and reopened. Deriving the live copy from the
+  // `teachers` list (which react-query refreshes after each mutation)
+  // keeps the dialog's document list current while it's open.
+  const liveDocumentTeacher = documentTeacher
+    ? teachers.find((t) => t._id === documentTeacher._id) || documentTeacher
+    : null;
+
+  const documentTeacherDocs = flattenTeacherDocuments(
+    liveDocumentTeacher?.documents,
+  );
 
   // ====================================================
   // CHANGE
   // ====================================================
 
   const handleChange = (e) => {
-    const {
-      name,
-      value,
-    } = e.target;
+    const { name, value } = e.target;
 
     setForm((prev) => ({
       ...prev,
@@ -475,80 +507,48 @@ export default function TeachersPage() {
     const next = {};
 
     if (!form.name.trim()) {
-      next.name =
-        "Teacher name is required";
+      next.name = "Teacher name is required";
     }
 
     if (!form.email.trim()) {
-      next.email =
-        "Email is required";
+      next.email = "Email is required";
     }
 
     if (!isEdit && !form.password) {
-      next.password =
-        "Password is required";
+      next.password = "Password is required";
     }
 
-    if (
-      !isEdit &&
-      form.password &&
-      form.password.length < 6
-    ) {
-      next.password =
-        "Minimum 6 characters";
+    if (!isEdit && form.password && form.password.length < 6) {
+      next.password = "Minimum 6 characters";
     }
 
     if (!form.qualification.trim()) {
-      next.qualification =
-        "Qualification is required";
+      next.qualification = "Qualification is required";
     }
 
-    if (
-      form.phone &&
-      !/^[6-9]\d{9}$/.test(
-        form.phone.trim()
-      )
-    ) {
-      next.phone =
-        "Enter valid 10 digit mobile number";
+    if (form.phone && !/^[6-9]\d{9}$/.test(form.phone.trim())) {
+      next.phone = "Enter valid 10 digit mobile number";
     }
 
-    if (
-      form.pincode &&
-      !/^\d{6}$/.test(
-        form.pincode.trim()
-      )
-    ) {
-      next.pincode =
-        "Enter valid 6 digit pincode";
+    // FIX: was /^\d{6}$/, allowing a pincode starting with 0 — aligned
+    // with the rule enforced everywhere else (backend included).
+    if (form.pincode && !/^[1-9]\d{5}$/.test(form.pincode.trim())) {
+      next.pincode = "Enter valid 6 digit pincode";
     }
 
-    if (
-      form.aadharNumber &&
-      !/^\d{12}$/.test(
-        form.aadharNumber.trim()
-      )
-    ) {
-      next.aadharNumber =
-        "Aadhar must contain 12 digits";
+    if (form.aadharNumber && !/^\d{12}$/.test(form.aadharNumber.trim())) {
+      next.aadharNumber = "Aadhar must contain 12 digits";
     }
 
     if (
       form.panNumber &&
-      !/^[A-Z]{5}[0-9]{4}[A-Z]$/i.test(
-        form.panNumber.trim()
-      )
+      !/^[A-Z]{5}[0-9]{4}[A-Z]$/i.test(form.panNumber.trim())
     ) {
-      next.panNumber =
-        "Enter valid PAN number";
+      next.panNumber = "Enter valid PAN number";
     }
 
-    if (
-      form.experienceYears !== "" &&
-      Number(form.experienceYears) < 0
-    ) {
-      next.experienceYears =
-        "Experience cannot be negative";
+    if (form.experienceYears !== "" && Number(form.experienceYears) < 0) {
+      next.experienceYears = "Experience cannot be negative";
     }
 
     setErrors(next);
@@ -563,15 +563,12 @@ export default function TeachersPage() {
   const handleCreate = () => {
     if (!validate(false)) return;
 
-    createTeacher(
-      getPayload(form, false),
-      {
-        onSuccess: () => {
-          setForm(emptyForm);
-          setErrors({});
-        },
-      }
-    );
+    createTeacher(getPayload(form, false), {
+      onSuccess: () => {
+        setForm(emptyForm);
+        setErrors({});
+      },
+    });
   };
 
   // ====================================================
@@ -580,9 +577,7 @@ export default function TeachersPage() {
 
   const handleEditOpen = (teacher) => {
     setEditTeacher(teacher);
-    setForm(
-      getFormFromTeacher(teacher)
-    );
+    setForm(getFormFromTeacher(teacher));
     setErrors({});
   };
 
@@ -595,13 +590,9 @@ export default function TeachersPage() {
 
     updateTeacher(
       {
-        teacherId:
-          editTeacher._id,
+        teacherId: editTeacher._id,
 
-        data: getPayload(
-          form,
-          true
-        ),
+        data: getPayload(form, true),
       },
       {
         onSuccess: () => {
@@ -609,7 +600,7 @@ export default function TeachersPage() {
           setForm(emptyForm);
           setErrors({});
         },
-      }
+      },
     );
   };
 
@@ -624,44 +615,60 @@ export default function TeachersPage() {
       return;
     }
 
+    // FIX: was checking `documentType === "other"`, which no longer
+    // (and never actually did) match any real value once the type list
+    // above is corrected. Now checks the real backend value.
+    if (documentType === "otherDocuments" && !documentName.trim()) {
+      setErrors((prev) => ({
+        ...prev,
+        documentName: "Document name is required for 'Other'",
+      }));
+      return;
+    }
+
     const fd = new FormData();
 
-    fd.append(
-      "file",
-      documentFile
-    );
+    fd.append("file", documentFile);
 
-    fd.append(
-      "documentType",
-      documentType
-    );
+    fd.append("documentType", documentType);
 
-    if (documentType === "other") {
+    if (documentType === "otherDocuments") {
+      // FIX: was fd.append("name", ...) — the backend controller reads
+      // req.body.documentName, not req.body.name, so an "Other" document's
+      // custom name was silently dropped and the upload would fail the
+      // server-side "documentName is required for otherDocuments" check
+      // even when the admin had typed one in.
       fd.append(
-        "name",
-        documentName ||
-          documentFile.name
+        "documentName",
+        documentName.trim() || documentFile.name,
       );
     }
 
     uploadDocument(
       {
-        teacherId:
-          documentTeacher._id,
+        teacherId: documentTeacher._id,
 
         formData: fd,
       },
       {
         onSuccess: () => {
-          setDocumentTeacher(null);
           setDocumentFile(null);
           setDocumentName("");
-          setDocumentType(
-            "aadharCard"
-          );
+          setDocumentType("aadharCard");
+          setErrors((prev) => ({ ...prev, documentName: "" }));
         },
-      }
+      },
     );
+  };
+
+  const handleDocumentDelete = (doc) => {
+    if (!documentTeacher) return;
+
+    deleteDocument({
+      teacherId: documentTeacher._id,
+      documentType: doc.documentType,
+      documentId: doc.documentId,
+    });
   };
 
   // ====================================================
@@ -683,40 +690,25 @@ export default function TeachersPage() {
       {/* HEADER */}
 
       <Box sx={{ mb: 3 }}>
-        <Typography
-          variant="h5"
-          fontWeight={800}
-        >
+        <Typography variant="h5" fontWeight={800}>
           Teacher Management
         </Typography>
 
-        <Typography
-          variant="body2"
-          color="text.secondary"
-        >
-          Create, view, edit and manage
-          complete teacher information.
+        <Typography variant="body2" color="text.secondary">
+          Create, view, edit and manage complete teacher information.
         </Typography>
       </Box>
 
-      <Grid
-        container
-        spacing={3}
-      >
+      <Grid container spacing={3}>
         {/* ==============================================
             CREATE FORM
         ============================================== */}
 
-        <Grid
-          item
-          xs={12}
-          lg={7}
-        >
+        <Grid item xs={12} lg={7}>
           <Card
             elevation={0}
             sx={{
-              border:
-                "1px solid #e2e8f0",
+              border: "1px solid #e2e8f0",
               borderRadius: 3,
             }}
           >
@@ -728,10 +720,7 @@ export default function TeachersPage() {
                 },
               }}
             >
-              <Typography
-                variant="h6"
-                fontWeight={700}
-              >
+              <Typography variant="h6" fontWeight={700}>
                 Create Teacher
               </Typography>
 
@@ -740,37 +729,23 @@ export default function TeachersPage() {
                 color="text.secondary"
                 sx={{ mb: 3 }}
               >
-                Fill complete teacher
-                information.
+                Fill complete teacher information.
               </Typography>
 
               {/* BASIC */}
 
-              <SectionTitle>
-                Basic Information
-              </SectionTitle>
+              <SectionTitle>Basic Information</SectionTitle>
 
-              <Grid
-                container
-                spacing={2}
-              >
+              <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <Field
                     label="Teacher Name"
                     name="name"
                     value={form.name}
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <PersonOutline />
-                    }
-                    error={
-                      !!errors.name
-                    }
-                    helperText={
-                      errors.name
-                    }
+                    onChange={handleChange}
+                    icon={<PersonOutline />}
+                    error={!!errors.name}
+                    helperText={errors.name}
                   />
                 </Grid>
 
@@ -780,18 +755,10 @@ export default function TeachersPage() {
                     name="email"
                     type="email"
                     value={form.email}
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <EmailOutlined />
-                    }
-                    error={
-                      !!errors.email
-                    }
-                    helperText={
-                      errors.email
-                    }
+                    onChange={handleChange}
+                    icon={<EmailOutlined />}
+                    error={!!errors.email}
+                    helperText={errors.email}
                   />
                 </Grid>
 
@@ -800,21 +767,11 @@ export default function TeachersPage() {
                     label="Password"
                     name="password"
                     type="password"
-                    value={
-                      form.password
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <LockOutlined />
-                    }
-                    error={
-                      !!errors.password
-                    }
-                    helperText={
-                      errors.password
-                    }
+                    value={form.password}
+                    onChange={handleChange}
+                    icon={<LockOutlined />}
+                    error={!!errors.password}
+                    helperText={errors.password}
                   />
                 </Grid>
 
@@ -822,57 +779,32 @@ export default function TeachersPage() {
                   <Field
                     label="Phone"
                     name="phone"
-                    value={
-                      form.phone
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <PhoneOutlined />
-                    }
+                    value={form.phone}
+                    onChange={handleChange}
+                    icon={<PhoneOutlined />}
                     inputProps={{
                       maxLength: 10,
                     }}
-                    error={
-                      !!errors.phone
-                    }
-                    helperText={
-                      errors.phone
-                    }
+                    error={!!errors.phone}
+                    helperText={errors.phone}
                   />
                 </Grid>
               </Grid>
 
               {/* PROFESSIONAL */}
 
-              <SectionTitle>
-                Professional Information
-              </SectionTitle>
+              <SectionTitle>Professional Information</SectionTitle>
 
-              <Grid
-                container
-                spacing={2}
-              >
+              <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <Field
                     label="Qualification"
                     name="qualification"
-                    value={
-                      form.qualification
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <SchoolOutlined />
-                    }
-                    error={
-                      !!errors.qualification
-                    }
-                    helperText={
-                      errors.qualification
-                    }
+                    value={form.qualification}
+                    onChange={handleChange}
+                    icon={<SchoolOutlined />}
+                    error={!!errors.qualification}
+                    helperText={errors.qualification}
                   />
                 </Grid>
 
@@ -880,12 +812,8 @@ export default function TeachersPage() {
                   <Field
                     label="Specialization"
                     name="specialization"
-                    value={
-                      form.specialization
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.specialization}
+                    onChange={handleChange}
                   />
                 </Grid>
 
@@ -895,24 +823,19 @@ export default function TeachersPage() {
                     select
                     label="Employment Type"
                     name="employmentType"
-                    value={
-                      form.employmentType
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.employmentType}
+                    onChange={handleChange}
                   >
-                    <MenuItem value="FULL_TIME">
-                      Full Time
-                    </MenuItem>
+                    <MenuItem value="FULL_TIME">Full Time</MenuItem>
 
-                    <MenuItem value="PART_TIME">
-                      Part Time
-                    </MenuItem>
+                    <MenuItem value="PART_TIME">Part Time</MenuItem>
 
-                    <MenuItem value="CONTRACT">
-                      Contract
-                    </MenuItem>
+                    <MenuItem value="CONTRACT">Contract</MenuItem>
+
+                    {/* FIX: "GUEST" is a valid employmentType on the
+                        backend model/controller but was missing from
+                        this select entirely. */}
+                    <MenuItem value="GUEST">Guest</MenuItem>
                   </TextField>
                 </Grid>
 
@@ -920,12 +843,8 @@ export default function TeachersPage() {
                   <Field
                     label="Previous Institutions"
                     name="previousInstitutions"
-                    value={
-                      form.previousInstitutions
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.previousInstitutions}
+                    onChange={handleChange}
                     placeholder="School A, School B"
                   />
                 </Grid>
@@ -933,24 +852,15 @@ export default function TeachersPage() {
 
               {/* ADDRESS */}
 
-              <SectionTitle>
-                Address
-              </SectionTitle>
+              <SectionTitle>Address</SectionTitle>
 
-              <Grid
-                container
-                spacing={2}
-              >
+              <Grid container spacing={2}>
                 <Grid item xs={12}>
                   <Field
                     label="Street"
                     name="street"
-                    value={
-                      form.street
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.street}
+                    onChange={handleChange}
                   />
                 </Grid>
 
@@ -958,15 +868,9 @@ export default function TeachersPage() {
                   <Field
                     label="City"
                     name="city"
-                    value={
-                      form.city
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <LocationCityOutlined />
-                    }
+                    value={form.city}
+                    onChange={handleChange}
+                    icon={<LocationCityOutlined />}
                   />
                 </Grid>
 
@@ -974,12 +878,8 @@ export default function TeachersPage() {
                   <Field
                     label="State"
                     name="state"
-                    value={
-                      form.state
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.state}
+                    onChange={handleChange}
                   />
                 </Grid>
 
@@ -987,21 +887,13 @@ export default function TeachersPage() {
                   <Field
                     label="Pincode"
                     name="pincode"
-                    value={
-                      form.pincode
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.pincode}
+                    onChange={handleChange}
                     inputProps={{
                       maxLength: 6,
                     }}
-                    error={
-                      !!errors.pincode
-                    }
-                    helperText={
-                      errors.pincode
-                    }
+                    error={!!errors.pincode}
+                    helperText={errors.pincode}
                   />
                 </Grid>
 
@@ -1009,12 +901,8 @@ export default function TeachersPage() {
                   <Field
                     label="Alternate Phone"
                     name="alternatePhone"
-                    value={
-                      form.alternatePhone
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.alternatePhone}
+                    onChange={handleChange}
                   />
                 </Grid>
 
@@ -1023,39 +911,24 @@ export default function TeachersPage() {
                     label="Personal Email"
                     name="personalEmail"
                     type="email"
-                    value={
-                      form.personalEmail
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.personalEmail}
+                    onChange={handleChange}
                   />
                 </Grid>
               </Grid>
 
               {/* EMPLOYMENT */}
 
-              <SectionTitle>
-                Employment Details
-              </SectionTitle>
+              <SectionTitle>Employment Details</SectionTitle>
 
-              <Grid
-                container
-                spacing={2}
-              >
+              <Grid container spacing={2}>
                 <Grid item xs={12} md={4}>
                   <Field
                     label="Employee ID"
                     name="employeeId"
-                    value={
-                      form.employeeId
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <BadgeOutlined />
-                    }
+                    value={form.employeeId}
+                    onChange={handleChange}
+                    icon={<BadgeOutlined />}
                   />
                 </Grid>
 
@@ -1064,15 +937,9 @@ export default function TeachersPage() {
                     label="Joining Date"
                     name="joiningDate"
                     type="date"
-                    value={
-                      form.joiningDate
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <EventOutlined />
-                    }
+                    value={form.joiningDate}
+                    onChange={handleChange}
+                    icon={<EventOutlined />}
                   />
                 </Grid>
 
@@ -1081,57 +948,32 @@ export default function TeachersPage() {
                     label="Experience Years"
                     name="experienceYears"
                     type="number"
-                    value={
-                      form.experienceYears
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <WorkHistoryOutlined />
-                    }
-                    error={
-                      !!errors.experienceYears
-                    }
-                    helperText={
-                      errors.experienceYears
-                    }
+                    value={form.experienceYears}
+                    onChange={handleChange}
+                    icon={<WorkHistoryOutlined />}
+                    error={!!errors.experienceYears}
+                    helperText={errors.experienceYears}
                   />
                 </Grid>
               </Grid>
 
               {/* IDENTITY */}
 
-              <SectionTitle>
-                Identity & Personal
-              </SectionTitle>
+              <SectionTitle>Identity & Personal</SectionTitle>
 
-              <Grid
-                container
-                spacing={2}
-              >
+              <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <Field
                     label="Aadhar Number"
                     name="aadharNumber"
-                    value={
-                      form.aadharNumber
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <FingerprintOutlined />
-                    }
+                    value={form.aadharNumber}
+                    onChange={handleChange}
+                    icon={<FingerprintOutlined />}
                     inputProps={{
                       maxLength: 12,
                     }}
-                    error={
-                      !!errors.aadharNumber
-                    }
-                    helperText={
-                      errors.aadharNumber
-                    }
+                    error={!!errors.aadharNumber}
+                    helperText={errors.aadharNumber}
                   />
                 </Grid>
 
@@ -1139,21 +981,13 @@ export default function TeachersPage() {
                   <Field
                     label="PAN Number"
                     name="panNumber"
-                    value={
-                      form.panNumber
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.panNumber}
+                    onChange={handleChange}
                     inputProps={{
                       maxLength: 10,
                     }}
-                    error={
-                      !!errors.panNumber
-                    }
-                    helperText={
-                      errors.panNumber
-                    }
+                    error={!!errors.panNumber}
+                    helperText={errors.panNumber}
                   />
                 </Grid>
 
@@ -1161,15 +995,9 @@ export default function TeachersPage() {
                   <Field
                     label="Nationality"
                     name="nationality"
-                    value={
-                      form.nationality
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <PublicOutlined />
-                    }
+                    value={form.nationality}
+                    onChange={handleChange}
+                    icon={<PublicOutlined />}
                   />
                 </Grid>
 
@@ -1179,28 +1007,13 @@ export default function TeachersPage() {
                     select
                     label="Category"
                     name="category"
-                    value={
-                      form.category
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.category}
+                    onChange={handleChange}
                   >
-                    <MenuItem value="">
-                      Select
-                    </MenuItem>
+                    <MenuItem value="">Select</MenuItem>
 
-                    {[
-                      "GENERAL",
-                      "OBC",
-                      "SC",
-                      "ST",
-                      "EWS",
-                    ].map((x) => (
-                      <MenuItem
-                        key={x}
-                        value={x}
-                      >
+                    {["GENERAL", "OBC", "SC", "ST", "EWS"].map((x) => (
+                      <MenuItem key={x} value={x}>
                         {x}
                       </MenuItem>
                     ))}
@@ -1211,12 +1024,8 @@ export default function TeachersPage() {
                   <Field
                     label="Religion"
                     name="religion"
-                    value={
-                      form.religion
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.religion}
+                    onChange={handleChange}
                   />
                 </Grid>
 
@@ -1225,12 +1034,8 @@ export default function TeachersPage() {
                     label="Date of Birth"
                     name="dateOfBirth"
                     type="date"
-                    value={
-                      form.dateOfBirth
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.dateOfBirth}
+                    onChange={handleChange}
                   />
                 </Grid>
 
@@ -1240,25 +1045,13 @@ export default function TeachersPage() {
                     select
                     label="Gender"
                     name="gender"
-                    value={
-                      form.gender
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.gender}
+                    onChange={handleChange}
                   >
-                    <MenuItem value="">
-                      Select
-                    </MenuItem>
-                    <MenuItem value="MALE">
-                      Male
-                    </MenuItem>
-                    <MenuItem value="FEMALE">
-                      Female
-                    </MenuItem>
-                    <MenuItem value="OTHER">
-                      Other
-                    </MenuItem>
+                    <MenuItem value="">Select</MenuItem>
+                    <MenuItem value="MALE">Male</MenuItem>
+                    <MenuItem value="FEMALE">Female</MenuItem>
+                    <MenuItem value="OTHER">Other</MenuItem>
                   </TextField>
                 </Grid>
 
@@ -1268,34 +1061,18 @@ export default function TeachersPage() {
                     select
                     label="Blood Group"
                     name="bloodGroup"
-                    value={
-                      form.bloodGroup
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.bloodGroup}
+                    onChange={handleChange}
                   >
-                    <MenuItem value="">
-                      Select
-                    </MenuItem>
+                    <MenuItem value="">Select</MenuItem>
 
-                    {[
-                      "A+",
-                      "A-",
-                      "B+",
-                      "B-",
-                      "AB+",
-                      "AB-",
-                      "O+",
-                      "O-",
-                    ].map((x) => (
-                      <MenuItem
-                        key={x}
-                        value={x}
-                      >
-                        {x}
-                      </MenuItem>
-                    ))}
+                    {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(
+                      (x) => (
+                        <MenuItem key={x} value={x}>
+                          {x}
+                        </MenuItem>
+                      ),
+                    )}
                   </TextField>
                 </Grid>
 
@@ -1305,59 +1082,34 @@ export default function TeachersPage() {
                     select
                     label="Marital Status"
                     name="maritalStatus"
-                    value={
-                      form.maritalStatus
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.maritalStatus}
+                    onChange={handleChange}
                   >
-                    <MenuItem value="">
-                      Select
-                    </MenuItem>
+                    <MenuItem value="">Select</MenuItem>
 
-                    <MenuItem value="SINGLE">
-                      Single
-                    </MenuItem>
+                    <MenuItem value="SINGLE">Single</MenuItem>
 
-                    <MenuItem value="MARRIED">
-                      Married
-                    </MenuItem>
+                    <MenuItem value="MARRIED">Married</MenuItem>
 
-                    <MenuItem value="DIVORCED">
-                      Divorced
-                    </MenuItem>
+                    <MenuItem value="DIVORCED">Divorced</MenuItem>
 
-                    <MenuItem value="WIDOWED">
-                      Widowed
-                    </MenuItem>
+                    <MenuItem value="WIDOWED">Widowed</MenuItem>
                   </TextField>
                 </Grid>
               </Grid>
 
               {/* EMERGENCY */}
 
-              <SectionTitle>
-                Emergency Contact
-              </SectionTitle>
+              <SectionTitle>Emergency Contact</SectionTitle>
 
-              <Grid
-                container
-                spacing={2}
-              >
+              <Grid container spacing={2}>
                 <Grid item xs={12} md={4}>
                   <Field
                     label="Contact Name"
                     name="emergencyName"
-                    value={
-                      form.emergencyName
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <ContactEmergencyOutlined />
-                    }
+                    value={form.emergencyName}
+                    onChange={handleChange}
+                    icon={<ContactEmergencyOutlined />}
                   />
                 </Grid>
 
@@ -1365,12 +1117,8 @@ export default function TeachersPage() {
                   <Field
                     label="Contact Phone"
                     name="emergencyPhone"
-                    value={
-                      form.emergencyPhone
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.emergencyPhone}
+                    onChange={handleChange}
                   />
                 </Grid>
 
@@ -1378,39 +1126,24 @@ export default function TeachersPage() {
                   <Field
                     label="Relation"
                     name="emergencyRelation"
-                    value={
-                      form.emergencyRelation
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.emergencyRelation}
+                    onChange={handleChange}
                   />
                 </Grid>
               </Grid>
 
               {/* PAYROLL */}
 
-              <SectionTitle>
-                Bank / Payroll
-              </SectionTitle>
+              <SectionTitle>Bank / Payroll</SectionTitle>
 
-              <Grid
-                container
-                spacing={2}
-              >
+              <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <Field
                     label="Bank Account"
                     name="bankAccount"
-                    value={
-                      form.bankAccount
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    icon={
-                      <AccountBalanceOutlined />
-                    }
+                    value={form.bankAccount}
+                    onChange={handleChange}
+                    icon={<AccountBalanceOutlined />}
                   />
                 </Grid>
 
@@ -1418,12 +1151,8 @@ export default function TeachersPage() {
                   <Field
                     label="IFSC"
                     name="ifsc"
-                    value={
-                      form.ifsc
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.ifsc}
+                    onChange={handleChange}
                   />
                 </Grid>
 
@@ -1431,12 +1160,8 @@ export default function TeachersPage() {
                   <Field
                     label="Bank Name"
                     name="bankName"
-                    value={
-                      form.bankName
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.bankName}
+                    onChange={handleChange}
                   />
                 </Grid>
 
@@ -1444,12 +1169,8 @@ export default function TeachersPage() {
                   <Field
                     label="Account Holder Name"
                     name="accountHolderName"
-                    value={
-                      form.accountHolderName
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.accountHolderName}
+                    onChange={handleChange}
                   />
                 </Grid>
               </Grid>
@@ -1459,23 +1180,16 @@ export default function TeachersPage() {
               <Button
                 fullWidth
                 variant="contained"
-                startIcon={
-                  <SaveOutlined />
-                }
-                onClick={
-                  handleCreate
-                }
+                startIcon={<SaveOutlined />}
+                onClick={handleCreate}
                 disabled={creating}
                 sx={{
                   py: 1.3,
-                  textTransform:
-                    "none",
+                  textTransform: "none",
                   fontWeight: 700,
                 }}
               >
-                {creating
-                  ? "Creating..."
-                  : "Create Teacher"}
+                {creating ? "Creating..." : "Create Teacher"}
               </Button>
             </CardContent>
           </Card>
@@ -1485,60 +1199,37 @@ export default function TeachersPage() {
             TEACHERS TABLE
         ============================================== */}
 
-        <Grid
-          item
-          xs={12}
-          lg={5}
-        >
+        <Grid item xs={12} lg={5}>
           <Card
             elevation={0}
             sx={{
-              border:
-                "1px solid #e2e8f0",
+              border: "1px solid #e2e8f0",
               borderRadius: 3,
             }}
           >
             <CardContent>
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={1}
-                mb={2}
-              >
+              <Stack direction="row" alignItems="center" spacing={1} mb={2}>
                 <GroupsIcon color="primary" />
 
-                <Typography
-                  variant="h6"
-                  fontWeight={700}
-                >
+                <Typography variant="h6" fontWeight={700}>
                   All Teachers
                 </Typography>
 
-                <Chip
-                  label={
-                    teachers.length
-                  }
-                  size="small"
-                  color="primary"
-                />
+                <Chip label={teachers.length} size="small" color="primary" />
               </Stack>
 
               <Divider sx={{ mb: 2 }} />
 
               <Box
                 sx={{
-                  overflowX:
-                    "auto",
+                  overflowX: "auto",
                 }}
               >
-                <Table
-                  size="small"
-                >
+                <Table size="small">
                   <TableHead>
                     <TableRow
                       sx={{
-                        bgcolor:
-                          "#f8fafc",
+                        bgcolor: "#f8fafc",
                       }}
                     >
                       <TableCell>
@@ -1562,143 +1253,101 @@ export default function TeachersPage() {
                   <TableBody>
                     {isLoading && (
                       <TableRow>
-                        <TableCell
-                          colSpan={4}
-                          align="center"
-                        >
-                          <CircularProgress
-                            size={25}
-                          />
+                        <TableCell colSpan={4} align="center">
+                          <CircularProgress size={25} />
                         </TableCell>
                       </TableRow>
                     )}
 
                     {!isLoading &&
-                      teachers.map(
-                        (teacher) => (
-                          <TableRow
-                            key={
-                              teacher._id
-                            }
-                            hover
-                          >
-                            <TableCell>
-                              <Typography
-                                fontWeight={
-                                  600
-                                }
-                                variant="body2"
-                              >
-                                {teacher
-                                  .user
-                                  ?.name ||
-                                  "—"}
-                              </Typography>
+                      teachers.map((teacher) => (
+                        <TableRow key={teacher._id} hover>
+                          <TableCell>
+                            <Typography fontWeight={600} variant="body2">
+                              {teacher.user?.name || "—"}
+                            </Typography>
 
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {teacher
-                                  .user
-                                  ?.email ||
-                                  "—"}
-                              </Typography>
-                            </TableCell>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {teacher.user?.email || "—"}
+                            </Typography>
+                          </TableCell>
 
-                            <TableCell>
-                              <Chip
-                                label={
-                                  teacher.employeeId ||
-                                  "—"
-                                }
+                          <TableCell>
+                            <Chip
+                              label={teacher.employeeId || "—"}
+                              size="small"
+                              variant="outlined"
+                            />
+                          </TableCell>
+
+                          <TableCell>
+                            {/* FIX: was showing teacher.user?.isActive
+                                (login enabled/disabled) labelled as
+                                "Active"/"Inactive" — conflates the login
+                                flag with the teacher's actual `status`
+                                (ACTIVE/LEFT) field. Now shows the real
+                                profile status, matching what the edit
+                                dialog's new Status field controls. */}
+                            <Chip
+                              label={teacher.status || "ACTIVE"}
+                              size="small"
+                              color={
+                                teacher.status === "LEFT"
+                                  ? "default"
+                                  : "success"
+                              }
+                            />
+                          </TableCell>
+
+                          <TableCell align="right">
+                            <Tooltip title="View">
+                              <IconButton
                                 size="small"
-                                variant="outlined"
-                              />
-                            </TableCell>
+                                onClick={() => setViewTeacher(teacher)}
+                              >
+                                <VisibilityOutlined />
+                              </IconButton>
+                            </Tooltip>
 
-                            <TableCell>
-                              <Chip
-                                label={
-                                  teacher
-                                    .user
-                                    ?.isActive
-                                    ? "Active"
-                                    : "Inactive"
-                                }
+                            <Tooltip title="Edit">
+                              <IconButton
                                 size="small"
-                                color={
-                                  teacher
-                                    .user
-                                    ?.isActive
-                                    ? "success"
-                                    : "default"
-                                }
-                              />
-                            </TableCell>
+                                color="primary"
+                                onClick={() => handleEditOpen(teacher)}
+                              >
+                                <EditOutlined />
+                              </IconButton>
+                            </Tooltip>
 
-                            <TableCell align="right">
-                              <Tooltip title="View">
-                                <IconButton
-                                  size="small"
-                                  onClick={() =>
-                                    setViewTeacher(
-                                      teacher
-                                    )
-                                  }
-                                >
-                                  <VisibilityOutlined />
-                                </IconButton>
-                              </Tooltip>
-
-                              <Tooltip title="Edit">
-                                <IconButton
-                                  size="small"
-                                  color="primary"
-                                  onClick={() =>
-                                    handleEditOpen(
-                                      teacher
-                                    )
-                                  }
-                                >
-                                  <EditOutlined />
-                                </IconButton>
-                              </Tooltip>
-
-                              <Tooltip title="Documents">
-                                <IconButton
-                                  size="small"
-                                  color="secondary"
-                                  onClick={() =>
-                                    setDocumentTeacher(
-                                      teacher
-                                    )
-                                  }
-                                >
-                                  <UploadFileOutlined />
-                                </IconButton>
-                              </Tooltip>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      )}
-
-                    {!isLoading &&
-                      teachers.length ===
-                        0 && (
-                        <TableRow>
-                          <TableCell
-                            colSpan={4}
-                            align="center"
-                            sx={{
-                              py: 5,
-                            }}
-                          >
-                            No teachers
-                            found
+                            <Tooltip title="Documents">
+                              <IconButton
+                                size="small"
+                                color="secondary"
+                                onClick={() => setDocumentTeacher(teacher)}
+                              >
+                                <UploadFileOutlined />
+                              </IconButton>
+                            </Tooltip>
                           </TableCell>
                         </TableRow>
-                      )}
+                      ))}
+
+                    {!isLoading && teachers.length === 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          align="center"
+                          sx={{
+                            py: 5,
+                          }}
+                        >
+                          No teachers found
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </Box>
@@ -1711,12 +1360,7 @@ export default function TeachersPage() {
           VIEW DIALOG
       ================================================== */}
 
-      <TeacherViewDialog
-        teacher={viewTeacher}
-        onClose={() =>
-          setViewTeacher(null)
-        }
-      />
+      <TeacherViewDialog teacher={viewTeacher} onClose={() => setViewTeacher(null)} />
 
       {/* ==================================================
           EDIT DIALOG
@@ -1724,126 +1368,50 @@ export default function TeachersPage() {
 
       <Dialog
         open={!!editTeacher}
-        onClose={() =>
-          setEditTeacher(null)
-        }
+        onClose={() => setEditTeacher(null)}
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>
-          Edit Teacher
-        </DialogTitle>
+        <DialogTitle>Edit Teacher</DialogTitle>
 
         <DialogContent dividers>
-          <Grid
-            container
-            spacing={2}
-            sx={{ pt: 1 }}
-          >
+          <Grid container spacing={2} sx={{ pt: 1 }}>
             {[
               ["name", "Name"],
               ["email", "Email"],
-              [
-                "qualification",
-                "Qualification",
-              ],
-              [
-                "specialization",
-                "Specialization",
-              ],
-              [
-                "phone",
-                "Phone",
-              ],
-              [
-                "alternatePhone",
-                "Alternate Phone",
-              ],
-              [
-                "personalEmail",
-                "Personal Email",
-              ],
-              [
-                "employeeId",
-                "Employee ID",
-              ],
-              [
-                "experienceYears",
-                "Experience Years",
-              ],
-              [
-                "aadharNumber",
-                "Aadhar Number",
-              ],
-              [
-                "panNumber",
-                "PAN Number",
-              ],
-              [
-                "nationality",
-                "Nationality",
-              ],
-              [
-                "religion",
-                "Religion",
-              ],
-              [
-                "street",
-                "Street",
-              ],
+              ["qualification", "Qualification"],
+              ["specialization", "Specialization"],
+              ["phone", "Phone"],
+              ["alternatePhone", "Alternate Phone"],
+              ["personalEmail", "Personal Email"],
+              ["employeeId", "Employee ID"],
+              ["experienceYears", "Experience Years"],
+              ["aadharNumber", "Aadhar Number"],
+              ["panNumber", "PAN Number"],
+              ["nationality", "Nationality"],
+              ["religion", "Religion"],
+              ["street", "Street"],
               ["city", "City"],
               ["state", "State"],
-              [
-                "pincode",
-                "Pincode",
-              ],
-              [
-                "emergencyName",
-                "Emergency Name",
-              ],
-              [
-                "emergencyPhone",
-                "Emergency Phone",
-              ],
-              [
-                "emergencyRelation",
-                "Emergency Relation",
-              ],
-              [
-                "bankAccount",
-                "Bank Account",
-              ],
+              ["pincode", "Pincode"],
+              ["emergencyName", "Emergency Name"],
+              ["emergencyPhone", "Emergency Phone"],
+              ["emergencyRelation", "Emergency Relation"],
+              ["bankAccount", "Bank Account"],
               ["ifsc", "IFSC"],
-              [
-                "bankName",
-                "Bank Name",
-              ],
-              [
-                "accountHolderName",
-                "Account Holder Name",
-              ],
-            ].map(
-              ([name, label]) => (
-                <Grid
-                  item
-                  xs={12}
-                  md={6}
-                  key={name}
-                >
-                  <TextField
-                    fullWidth
-                    label={label}
-                    name={name}
-                    value={
-                      form[name] ?? ""
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  />
-                </Grid>
-              )
-            )}
+              ["bankName", "Bank Name"],
+              ["accountHolderName", "Account Holder Name"],
+            ].map(([name, label]) => (
+              <Grid item xs={12} md={6} key={name}>
+                <TextField
+                  fullWidth
+                  label={label}
+                  name={name}
+                  value={form[name] ?? ""}
+                  onChange={handleChange}
+                />
+              </Grid>
+            ))}
 
             <Grid item xs={12} md={6}>
               <TextField
@@ -1851,12 +1419,8 @@ export default function TeachersPage() {
                 type="date"
                 label="Joining Date"
                 name="joiningDate"
-                value={
-                  form.joiningDate
-                }
-                onChange={
-                  handleChange
-                }
+                value={form.joiningDate}
+                onChange={handleChange}
                 InputLabelProps={{
                   shrink: true,
                 }}
@@ -1869,12 +1433,8 @@ export default function TeachersPage() {
                 type="date"
                 label="Date of Birth"
                 name="dateOfBirth"
-                value={
-                  form.dateOfBirth
-                }
-                onChange={
-                  handleChange
-                }
+                value={form.dateOfBirth}
+                onChange={handleChange}
                 InputLabelProps={{
                   shrink: true,
                 }}
@@ -1887,24 +1447,35 @@ export default function TeachersPage() {
                 select
                 label="Employment Type"
                 name="employmentType"
-                value={
-                  form.employmentType
-                }
-                onChange={
-                  handleChange
-                }
+                value={form.employmentType}
+                onChange={handleChange}
               >
-                <MenuItem value="FULL_TIME">
-                  Full Time
-                </MenuItem>
+                <MenuItem value="FULL_TIME">Full Time</MenuItem>
 
-                <MenuItem value="PART_TIME">
-                  Part Time
-                </MenuItem>
+                <MenuItem value="PART_TIME">Part Time</MenuItem>
 
-                <MenuItem value="CONTRACT">
-                  Contract
-                </MenuItem>
+                <MenuItem value="CONTRACT">Contract</MenuItem>
+
+                <MenuItem value="GUEST">Guest</MenuItem>
+              </TextField>
+            </Grid>
+
+            {/* FIX: new field — see getFormFromTeacher/getPayload notes.
+                Lets an admin actually change a teacher's status from
+                here, which was previously impossible from this dialog
+                despite the backend fully supporting it (and syncing the
+                teacher's login access accordingly). */}
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                select
+                label="Status"
+                name="status"
+                value={form.status}
+                onChange={handleChange}
+              >
+                <MenuItem value="ACTIVE">Active</MenuItem>
+                <MenuItem value="LEFT">Left</MenuItem>
               </TextField>
             </Grid>
 
@@ -1914,25 +1485,13 @@ export default function TeachersPage() {
                 select
                 label="Gender"
                 name="gender"
-                value={
-                  form.gender
-                }
-                onChange={
-                  handleChange
-                }
+                value={form.gender}
+                onChange={handleChange}
               >
-                <MenuItem value="">
-                  Select
-                </MenuItem>
-                <MenuItem value="MALE">
-                  Male
-                </MenuItem>
-                <MenuItem value="FEMALE">
-                  Female
-                </MenuItem>
-                <MenuItem value="OTHER">
-                  Other
-                </MenuItem>
+                <MenuItem value="">Select</MenuItem>
+                <MenuItem value="MALE">Male</MenuItem>
+                <MenuItem value="FEMALE">Female</MenuItem>
+                <MenuItem value="OTHER">Other</MenuItem>
               </TextField>
             </Grid>
 
@@ -1942,25 +1501,11 @@ export default function TeachersPage() {
                 select
                 label="Category"
                 name="category"
-                value={
-                  form.category
-                }
-                onChange={
-                  handleChange
-                }
+                value={form.category}
+                onChange={handleChange}
               >
-                {[
-                  "",
-                  "GENERAL",
-                  "OBC",
-                  "SC",
-                  "ST",
-                  "EWS",
-                ].map((x) => (
-                  <MenuItem
-                    key={x || "empty"}
-                    value={x}
-                  >
+                {["", "GENERAL", "OBC", "SC", "ST", "EWS"].map((x) => (
+                  <MenuItem key={x || "empty"} value={x}>
                     {x || "Select"}
                   </MenuItem>
                 ))}
@@ -1973,31 +1518,16 @@ export default function TeachersPage() {
                 select
                 label="Blood Group"
                 name="bloodGroup"
-                value={
-                  form.bloodGroup
-                }
-                onChange={
-                  handleChange
-                }
+                value={form.bloodGroup}
+                onChange={handleChange}
               >
-                {[
-                  "",
-                  "A+",
-                  "A-",
-                  "B+",
-                  "B-",
-                  "AB+",
-                  "AB-",
-                  "O+",
-                  "O-",
-                ].map((x) => (
-                  <MenuItem
-                    key={x || "empty"}
-                    value={x}
-                  >
-                    {x || "Select"}
-                  </MenuItem>
-                ))}
+                {["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(
+                  (x) => (
+                    <MenuItem key={x || "empty"} value={x}>
+                      {x || "Select"}
+                    </MenuItem>
+                  ),
+                )}
               </TextField>
             </Grid>
 
@@ -2007,24 +1537,11 @@ export default function TeachersPage() {
                 select
                 label="Marital Status"
                 name="maritalStatus"
-                value={
-                  form.maritalStatus
-                }
-                onChange={
-                  handleChange
-                }
+                value={form.maritalStatus}
+                onChange={handleChange}
               >
-                {[
-                  "",
-                  "SINGLE",
-                  "MARRIED",
-                  "DIVORCED",
-                  "WIDOWED",
-                ].map((x) => (
-                  <MenuItem
-                    key={x || "empty"}
-                    value={x}
-                  >
+                {["", "SINGLE", "MARRIED", "DIVORCED", "WIDOWED"].map((x) => (
+                  <MenuItem key={x || "empty"} value={x}>
                     {x || "Select"}
                   </MenuItem>
                 ))}
@@ -2034,24 +1551,10 @@ export default function TeachersPage() {
         </DialogContent>
 
         <DialogActions>
-          <Button
-            onClick={() =>
-              setEditTeacher(null)
-            }
-          >
-            Cancel
-          </Button>
+          <Button onClick={() => setEditTeacher(null)}>Cancel</Button>
 
-          <Button
-            variant="contained"
-            onClick={
-              handleUpdate
-            }
-            disabled={updating}
-          >
-            {updating
-              ? "Saving..."
-              : "Save Changes"}
+          <Button variant="contained" onClick={handleUpdate} disabled={updating}>
+            {updating ? "Saving..." : "Save Changes"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2062,97 +1565,116 @@ export default function TeachersPage() {
 
       <Dialog
         open={!!documentTeacher}
-        onClose={() =>
-          setDocumentTeacher(null)
-        }
+        onClose={() => {
+          setDocumentTeacher(null);
+          setDocumentFile(null);
+          setDocumentName("");
+          setDocumentType("aadharCard");
+          setErrors((prev) => ({ ...prev, documentName: "" }));
+        }}
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>
-          Upload Teacher Document
-        </DialogTitle>
+        <DialogTitle>Teacher Documents</DialogTitle>
 
         <DialogContent>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ mb: 2 }}
-          >
-            Teacher:{" "}
-            <b>
-              {
-                documentTeacher
-                  ?.user?.name
-              }
-            </b>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Teacher: <b>{documentTeacher?.user?.name}</b>
           </Typography>
+
+          {/* FIX: new — this dialog previously only had an upload form.
+              With no way to see or remove existing documents, the
+              delete-document backend endpoint added earlier had no path
+              to be used from the UI at all. */}
+          {documentTeacherDocs.length > 0 && (
+            <Stack spacing={1} sx={{ mb: 2.5 }}>
+              {documentTeacherDocs.map((doc) => (
+                <Stack
+                  key={`${doc.documentType}-${doc.documentId || "single"}`}
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  sx={{
+                    p: 1,
+                    borderRadius: 1.5,
+                    bgcolor: "#f8fafc",
+                    border: "1px solid #eef0f3",
+                  }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <DescriptionOutlined
+                      fontSize="small"
+                      sx={{ color: "#3150fd" }}
+                    />
+                    <Button
+                      size="small"
+                      href={doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{ textTransform: "none", fontSize: 13 }}
+                    >
+                      {doc.title}
+                    </Button>
+                  </Stack>
+
+                  <IconButton
+                    size="small"
+                    onClick={() => handleDocumentDelete(doc)}
+                    disabled={deletingDocument}
+                    sx={{ color: "#dc2626" }}
+                  >
+                    <DeleteOutline fontSize="small" />
+                  </IconButton>
+                </Stack>
+              ))}
+            </Stack>
+          )}
+
+          <Divider sx={{ mb: 2.5 }} />
 
           <Stack spacing={2}>
             <TextField
               fullWidth
               select
               label="Document Type"
-              value={
-                documentType
-              }
-              onChange={(e) =>
-                setDocumentType(
-                  e.target.value
-                )
-              }
+              value={documentType}
+              onChange={(e) => setDocumentType(e.target.value)}
             >
-              {documentTypes.map(
-                (doc) => (
-                  <MenuItem
-                    key={
-                      doc.value
-                    }
-                    value={
-                      doc.value
-                    }
-                  >
-                    {doc.label}
-                  </MenuItem>
-                )
-              )}
+              {documentTypes.map((doc) => (
+                <MenuItem key={doc.value} value={doc.value}>
+                  {doc.label}
+                </MenuItem>
+              ))}
             </TextField>
 
-            {documentType ===
-              "other" && (
+            {documentType === "otherDocuments" && (
               <TextField
                 fullWidth
                 label="Document Name"
-                value={
-                  documentName
-                }
-                onChange={(e) =>
-                  setDocumentName(
-                    e.target.value
-                  )
-                }
+                value={documentName}
+                onChange={(e) => {
+                  setDocumentName(e.target.value);
+                  if (errors.documentName) {
+                    setErrors((prev) => ({ ...prev, documentName: "" }));
+                  }
+                }}
+                error={!!errors.documentName}
+                helperText={errors.documentName}
               />
             )}
 
             <Button
               component="label"
               variant="outlined"
-              startIcon={
-                <UploadFileOutlined />
-              }
+              startIcon={<UploadFileOutlined />}
             >
-              {documentFile
-                ? documentFile.name
-                : "Choose File"}
+              {documentFile ? documentFile.name : "Choose File"}
 
               <input
                 hidden
                 type="file"
                 onChange={(e) =>
-                  setDocumentFile(
-                    e.target
-                      .files?.[0] ||
-                      null
-                  )
+                  setDocumentFile(e.target.files?.[0] || null)
                 }
               />
             </Button>
@@ -2161,28 +1683,23 @@ export default function TeachersPage() {
 
         <DialogActions>
           <Button
-            onClick={() =>
-              setDocumentTeacher(
-                null
-              )
-            }
+            onClick={() => {
+              setDocumentTeacher(null);
+              setDocumentFile(null);
+              setDocumentName("");
+              setDocumentType("aadharCard");
+              setErrors((prev) => ({ ...prev, documentName: "" }));
+            }}
           >
-            Cancel
+            Close
           </Button>
 
           <Button
             variant="contained"
-            disabled={
-              uploading ||
-              !documentFile
-            }
-            onClick={
-              handleDocumentUpload
-            }
+            disabled={uploading || !documentFile}
+            onClick={handleDocumentUpload}
           >
-            {uploading
-              ? "Uploading..."
-              : "Upload"}
+            {uploading ? "Uploading..." : "Upload"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2194,24 +1711,17 @@ export default function TeachersPage() {
 // SECTION TITLE
 // ======================================================
 
-function SectionTitle({
-  children,
-}) {
+function SectionTitle({ children }) {
   return (
     <Box
       sx={{
         mt: 3,
         mb: 2,
         pb: 1,
-        borderBottom:
-          "1px solid #e2e8f0",
+        borderBottom: "1px solid #e2e8f0",
       }}
     >
-      <Typography
-        fontSize={13}
-        fontWeight={800}
-        color="#475569"
-      >
+      <Typography fontSize={13} fontWeight={800} color="#475569">
         {children}
       </Typography>
     </Box>
@@ -2222,138 +1732,71 @@ function SectionTitle({
 // VIEW DIALOG
 // ======================================================
 
-function TeacherViewDialog({
-  teacher,
-  onClose,
-}) {
+function TeacherViewDialog({ teacher, onClose }) {
   if (!teacher) return null;
 
-  const address =
-    teacher.address || {};
+  const address = teacher.address || {};
 
-  const emergency =
-    teacher.emergencyContact || {};
+  const emergency = teacher.emergencyContact || {};
 
-  const Row = ({
-    label,
-    value,
-  }) => (
+  const Row = ({ label, value }) => (
     <Box>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >
+      <Typography variant="caption" color="text.secondary">
         {label}
       </Typography>
 
-      <Typography
-        variant="body2"
-        fontWeight={600}
-      >
+      <Typography variant="body2" fontWeight={600}>
         {value || "—"}
       </Typography>
     </Box>
   );
 
   return (
-    <Dialog
-      open={!!teacher}
-      onClose={onClose}
-      fullWidth
-      maxWidth="md"
-    >
+    <Dialog open={!!teacher} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-        >
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Box>
-            <Typography
-              variant="h6"
-              fontWeight={800}
-            >
-              {teacher.user?.name ||
-                "Teacher Profile"}
+            <Typography variant="h6" fontWeight={800}>
+              {teacher.user?.name || "Teacher Profile"}
             </Typography>
 
-            <Typography
-              variant="body2"
-              color="text.secondary"
-            >
-              Complete teacher
-              information
+            <Typography variant="body2" color="text.secondary">
+              Complete teacher information
             </Typography>
           </Box>
 
-          <IconButton
-            onClick={onClose}
-          >
+          <IconButton onClick={onClose}>
             <CloseOutlined />
           </IconButton>
         </Stack>
       </DialogTitle>
 
       <DialogContent dividers>
-        <Tabs
-          value={0}
-          sx={{ mb: 3 }}
-        >
+        <Tabs value={0} sx={{ mb: 3 }}>
           <Tab label="Profile" />
         </Tabs>
 
-        <Grid
-          container
-          spacing={3}
-        >
+        <Grid container spacing={3}>
           <Grid item xs={12}>
-            <Typography
-              fontWeight={800}
-              sx={{ mb: 1.5 }}
-            >
+            <Typography fontWeight={800} sx={{ mb: 1.5 }}>
               Basic Information
             </Typography>
 
-            <Grid
-              container
-              spacing={2}
-            >
+            <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Name"
-                  value={
-                    teacher.user
-                      ?.name
-                  }
-                />
+                <Row label="Name" value={teacher.user?.name} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Email"
-                  value={
-                    teacher.user
-                      ?.email
-                  }
-                />
+                <Row label="Email" value={teacher.user?.email} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Phone"
-                  value={
-                    teacher.phone
-                  }
-                />
+                <Row label="Phone" value={teacher.phone} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Personal Email"
-                  value={
-                    teacher.personalEmail
-                  }
-                />
+                <Row label="Personal Email" value={teacher.personalEmail} />
               </Grid>
             </Grid>
           </Grid>
@@ -2363,51 +1806,25 @@ function TeacherViewDialog({
           </Grid>
 
           <Grid item xs={12}>
-            <Typography
-              fontWeight={800}
-              sx={{ mb: 1.5 }}
-            >
+            <Typography fontWeight={800} sx={{ mb: 1.5 }}>
               Professional
             </Typography>
 
-            <Grid
-              container
-              spacing={2}
-            >
+            <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Qualification"
-                  value={
-                    teacher.qualification
-                  }
-                />
+                <Row label="Qualification" value={teacher.qualification} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Specialization"
-                  value={
-                    teacher.specialization
-                  }
-                />
+                <Row label="Specialization" value={teacher.specialization} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Employment Type"
-                  value={
-                    teacher.employmentType
-                  }
-                />
+                <Row label="Employment Type" value={teacher.employmentType} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Employee ID"
-                  value={
-                    teacher.employeeId
-                  }
-                />
+                <Row label="Employee ID" value={teacher.employeeId} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
@@ -2426,13 +1843,15 @@ function TeacherViewDialog({
                   label="Joining Date"
                   value={
                     teacher.joiningDate
-                      ? new Date(
-                          teacher.joiningDate
-                        ).toLocaleDateString()
+                      ? new Date(teacher.joiningDate).toLocaleDateString()
                       : "—"
                   }
                 />
               </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Row label="Status" value={teacher.status} />
+              </Grid>
             </Grid>
           </Grid>
 
@@ -2441,51 +1860,25 @@ function TeacherViewDialog({
           </Grid>
 
           <Grid item xs={12}>
-            <Typography
-              fontWeight={800}
-              sx={{ mb: 1.5 }}
-            >
+            <Typography fontWeight={800} sx={{ mb: 1.5 }}>
               Address
             </Typography>
 
-            <Grid
-              container
-              spacing={2}
-            >
+            <Grid container spacing={2}>
               <Grid item xs={12}>
-                <Row
-                  label="Street"
-                  value={
-                    address.street
-                  }
-                />
+                <Row label="Street" value={address.street} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="City"
-                  value={
-                    address.city
-                  }
-                />
+                <Row label="City" value={address.city} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="State"
-                  value={
-                    address.state
-                  }
-                />
+                <Row label="State" value={address.state} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Pincode"
-                  value={
-                    address.pincode
-                  }
-                />
+                <Row label="Pincode" value={address.pincode} />
               </Grid>
             </Grid>
           </Grid>
@@ -2495,87 +1888,41 @@ function TeacherViewDialog({
           </Grid>
 
           <Grid item xs={12}>
-            <Typography
-              fontWeight={800}
-              sx={{ mb: 1.5 }}
-            >
+            <Typography fontWeight={800} sx={{ mb: 1.5 }}>
               Identity
             </Typography>
 
-            <Grid
-              container
-              spacing={2}
-            >
+            <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Aadhar"
-                  value={
-                    teacher.aadharNumber
-                  }
-                />
+                <Row label="Aadhar" value={teacher.aadharNumber} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="PAN"
-                  value={
-                    teacher.panNumber
-                  }
-                />
+                <Row label="PAN" value={teacher.panNumber} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Nationality"
-                  value={
-                    teacher.nationality
-                  }
-                />
+                <Row label="Nationality" value={teacher.nationality} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Category"
-                  value={
-                    teacher.category
-                  }
-                />
+                <Row label="Category" value={teacher.category} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Religion"
-                  value={
-                    teacher.religion
-                  }
-                />
+                <Row label="Religion" value={teacher.religion} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Gender"
-                  value={
-                    teacher.gender
-                  }
-                />
+                <Row label="Gender" value={teacher.gender} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Blood Group"
-                  value={
-                    teacher.bloodGroup
-                  }
-                />
+                <Row label="Blood Group" value={teacher.bloodGroup} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Marital Status"
-                  value={
-                    teacher.maritalStatus
-                  }
-                />
+                <Row label="Marital Status" value={teacher.maritalStatus} />
               </Grid>
             </Grid>
           </Grid>
@@ -2585,42 +1932,21 @@ function TeacherViewDialog({
           </Grid>
 
           <Grid item xs={12}>
-            <Typography
-              fontWeight={800}
-              sx={{ mb: 1.5 }}
-            >
+            <Typography fontWeight={800} sx={{ mb: 1.5 }}>
               Emergency Contact
             </Typography>
 
-            <Grid
-              container
-              spacing={2}
-            >
+            <Grid container spacing={2}>
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Name"
-                  value={
-                    emergency.name
-                  }
-                />
+                <Row label="Name" value={emergency.name} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Phone"
-                  value={
-                    emergency.phone
-                  }
-                />
+                <Row label="Phone" value={emergency.phone} />
               </Grid>
 
               <Grid item xs={12} sm={4}>
-                <Row
-                  label="Relation"
-                  value={
-                    emergency.relation
-                  }
-                />
+                <Row label="Relation" value={emergency.relation} />
               </Grid>
             </Grid>
           </Grid>
@@ -2630,51 +1956,25 @@ function TeacherViewDialog({
           </Grid>
 
           <Grid item xs={12}>
-            <Typography
-              fontWeight={800}
-              sx={{ mb: 1.5 }}
-            >
+            <Typography fontWeight={800} sx={{ mb: 1.5 }}>
               Bank Details
             </Typography>
 
-            <Grid
-              container
-              spacing={2}
-            >
+            <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Bank Name"
-                  value={
-                    teacher.bankName
-                  }
-                />
+                <Row label="Bank Name" value={teacher.bankName} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Account Holder"
-                  value={
-                    teacher.accountHolderName
-                  }
-                />
+                <Row label="Account Holder" value={teacher.accountHolderName} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="Account Number"
-                  value={
-                    teacher.bankAccount
-                  }
-                />
+                <Row label="Account Number" value={teacher.bankAccount} />
               </Grid>
 
               <Grid item xs={12} sm={6}>
-                <Row
-                  label="IFSC"
-                  value={
-                    teacher.ifsc
-                  }
-                />
+                <Row label="IFSC" value={teacher.ifsc} />
               </Grid>
             </Grid>
           </Grid>
@@ -2682,11 +1982,7 @@ function TeacherViewDialog({
       </DialogContent>
 
       <DialogActions>
-        <Button
-          onClick={onClose}
-        >
-          Close
-        </Button>
+        <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
   );

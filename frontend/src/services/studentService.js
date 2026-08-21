@@ -220,3 +220,45 @@ export const reactivateStudent = (studentProfileId) => {
 export const getLeftStudents = () => {
   return api.get("/students/left");
 };
+
+// ======================================================
+// ADMIN - IMPORT STUDENTS FROM EXCEL
+// ======================================================
+
+export const importStudents = (formData) => {
+  return api.post("/students/import", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+};
+
+// ======================================================
+// ADMIN - EXPORT STUDENTS TO EXCEL
+// ======================================================
+
+export const exportStudents = (params = {}) => {
+  return api.get("/students/export", {
+    params: {
+      ...(params.search?.trim()
+        ? {
+            search: params.search.trim(),
+          }
+        : {}),
+
+      ...(params.classId
+        ? {
+            classId: params.classId,
+          }
+        : {}),
+
+      ...(params.status
+        ? {
+            status: params.status,
+          }
+        : {}),
+    },
+
+    responseType: "blob",
+  });
+};

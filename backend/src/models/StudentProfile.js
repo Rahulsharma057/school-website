@@ -1,9 +1,5 @@
 const mongoose = require("mongoose");
 
-// ======================================================
-// DOCUMENT TYPES
-// ======================================================
-
 const DOCUMENT_TYPES = [
   "BIRTH_CERTIFICATE",
   "TRANSFER_CERTIFICATE",
@@ -15,93 +11,32 @@ const DOCUMENT_TYPES = [
 
 const documentSchema = new mongoose.Schema(
   {
-    type: {
-      type: String,
-      enum: DOCUMENT_TYPES,
-      default: "OTHER",
-    },
-
-    label: {
-      type: String,
-      trim: true,
-      default: "",
-      maxlength: 100,
-    },
-
-    url: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    originalName: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
+    type: { type: String, enum: DOCUMENT_TYPES, default: "OTHER" },
+    label: { type: String, trim: true, default: "", maxlength: 100 },
+    url: { type: String, required: true, trim: true },
+    originalName: { type: String, default: "", trim: true },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
-
-    uploadedAt: {
-      type: Date,
-      default: Date.now,
-    },
+    uploadedAt: { type: Date, default: Date.now },
   },
-  {
-    _id: true,
-  },
+  { _id: true },
 );
 
-// FIX: enforce the "label required when type === OTHER" rule at the schema
-// level too (previously only checked in the controller, so any other code
-// path that pushes into `documents` could silently save an unlabeled OTHER doc).
-//
-// FIX (500 error — "documents: next is not a function"): this hook used to
-// take a `next` callback param:
-//
-//   documentSchema.pre("validate", function (next) {
-//     if (...) return next(new Error(...));
-//     next();
-//   });
-//
-// Mongoose decides whether a pre-hook is callback-style or sync/promise-style
-// based on the function's declared arity (fn.length). For SUBDOCUMENT
-// pre-validate hooks specifically, Mongoose does not reliably invoke the
-// hook with a `next` argument on every code path (e.g. push()'ing into the
-// array and then calling the parent document's .save(), especially outside
-// a transaction session) — so `next` came through as undefined and calling
-// it threw "next is not a function", which is what surfaced as a 500 on
-// document upload. Declaring the hook as plain synchronous (no `next`
-// param, just throw on failure) sidesteps that ambiguity entirely and is
-// fully supported by Mongoose 5.10+ / 6.x / 7.x / 8.x.
 documentSchema.pre("validate", function () {
   if (this.type === "OTHER" && (!this.label || !this.label.trim())) {
     throw new Error("Label is required when document type is OTHER");
   }
 });
 
-// ======================================================
-// VALIDATORS
-// ======================================================
-
 const PINCODE_REGEX = /^[1-9][0-9]{5}$/;
 const AADHAR_REGEX = /^\d{12}$/;
 const PHONE_REGEX = /^[6-9]\d{9}$/;
 
-// ======================================================
-// STUDENT PROFILE
-// ======================================================
-
 const studentProfileSchema = new mongoose.Schema(
   {
-    // ==================================================
-    // USER
-    // ==================================================
-
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -110,46 +45,38 @@ const studentProfileSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ==================================================
-    // CLASS
-    // ==================================================
-
-    class: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Class",
+    // NEW — decides class vs program flow
+    institutionType: {
+      type: String,
+      enum: ["SCHOOL", "COLLEGE"],
       required: true,
+      default: "SCHOOL",
       index: true,
     },
 
-    rollNumber: {
-      type: String,
-      required: true,
-      trim: true,
+    // SCHOOL — ab required nahi (institutionType-based validation neeche hai)
+    class: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Class",
+      default: null,
+      index: true,
     },
 
-    // ==================================================
-    // ADDRESS
-    // ==================================================
+    // NEW — COLLEGE
+    program: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Program",
+      default: null,
+      index: true,
+    },
+    currentSemester: { type: Number, default: null, min: 1 },
+
+    rollNumber: { type: String, required: true, trim: true },
 
     address: {
-      street: {
-        type: String,
-        default: "",
-        trim: true,
-      },
-
-      city: {
-        type: String,
-        default: "",
-        trim: true,
-      },
-
-      state: {
-        type: String,
-        default: "",
-        trim: true,
-      },
-
+      street: { type: String, default: "", trim: true },
+      city: { type: String, default: "", trim: true },
+      state: { type: String, default: "", trim: true },
       pincode: {
         type: String,
         default: "",
@@ -161,20 +88,12 @@ const studentProfileSchema = new mongoose.Schema(
       },
     },
 
-    // ==================================================
-    // PARENT
-    // ==================================================
-
     parent: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
       index: true,
     },
-
-    // ==================================================
-    // BASIC DETAILS
-    // ==================================================
 
     dateOfBirth: {
       type: Date,
@@ -191,45 +110,16 @@ const studentProfileSchema = new mongoose.Schema(
       default: "ACTIVE",
       index: true,
     },
-
-    leftReason: {
-      type: String,
-      default: "",
-      trim: true,
-      maxlength: 300,
-    },
-
-    leftDate: {
-      type: Date,
-      default: null,
-    },
-
-    // ==================================================
-    // SELF EDITABLE
-    // ==================================================
+    leftReason: { type: String, default: "", trim: true, maxlength: 300 },
+    leftDate: { type: Date, default: null },
 
     bloodGroup: {
       type: String,
       enum: ["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
       default: "",
     },
-
-    profilePhoto: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    bio: {
-      type: String,
-      default: "",
-      trim: true,
-      maxlength: 300,
-    },
-
-    // ==================================================
-    // ADMIN ONLY
-    // ==================================================
+    profilePhoto: { type: String, default: "", trim: true },
+    bio: { type: String, default: "", trim: true, maxlength: 300 },
 
     phone: {
       type: String,
@@ -242,12 +132,7 @@ const studentProfileSchema = new mongoose.Schema(
     },
 
     emergencyContact: {
-      name: {
-        type: String,
-        default: "",
-        trim: true,
-      },
-
+      name: { type: String, default: "", trim: true },
       phone: {
         type: String,
         default: "",
@@ -258,56 +143,20 @@ const studentProfileSchema = new mongoose.Schema(
             "Emergency contact phone must be a valid 10-digit Indian mobile number",
         },
       },
-
-      relation: {
-        type: String,
-        default: "",
-        trim: true,
-      },
+      relation: { type: String, default: "", trim: true },
     },
 
-    admissionNumber: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    admissionDate: {
-      type: Date,
-      default: null,
-    },
-
-    previousSchool: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    house: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    // ==================================================
-    // TRANSPORT
-    // ==================================================
+    admissionNumber: { type: String, default: "", trim: true },
+    admissionDate: { type: Date, default: null },
+    previousSchool: { type: String, default: "", trim: true },
+    house: { type: String, default: "", trim: true },
 
     transportMode: {
       type: String,
       enum: ["", "SCHOOL_BUS", "SELF", "WALKING"],
       default: "",
     },
-
-    busRoute: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    // ==================================================
-    // MEDICAL
-    // ==================================================
+    busRoute: { type: String, default: "", trim: true },
 
     medicalConditions: {
       type: String,
@@ -315,10 +164,6 @@ const studentProfileSchema = new mongoose.Schema(
       trim: true,
       maxlength: 500,
     },
-
-    // ==================================================
-    // AADHAR
-    // ==================================================
 
     aadharNumber: {
       type: String,
@@ -329,104 +174,51 @@ const studentProfileSchema = new mongoose.Schema(
         message: "Aadhar number must be exactly 12 digits",
       },
     },
+    aadharFrontUrl: { type: String, default: "", trim: true },
+    aadharBackUrl: { type: String, default: "", trim: true },
 
-    aadharFrontUrl: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+    documents: { type: [documentSchema], default: [] },
 
-    aadharBackUrl: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    // ==================================================
-    // OTHER DOCUMENTS
-    // ==================================================
-
-    documents: {
-      type: [documentSchema],
-      default: [],
-    },
-
-    // ==================================================
-    // PARENT / GUARDIAN DETAILS
-    // ==================================================
-
-    fatherName: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    motherName: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    guardianOccupation: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    // ==================================================
-    // DEMOGRAPHIC
-    // ==================================================
+    fatherName: { type: String, default: "", trim: true },
+    motherName: { type: String, default: "", trim: true },
+    guardianOccupation: { type: String, default: "", trim: true },
 
     category: {
       type: String,
       enum: ["", "GENERAL", "OBC", "SC", "ST", "EWS"],
       default: "",
     },
-
-    religion: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    nationality: {
-      type: String,
-      default: "Indian",
-      trim: true,
-    },
+    religion: { type: String, default: "", trim: true },
+    nationality: { type: String, default: "Indian", trim: true },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-// ======================================================
-// PERFORMANCE INDEXES
-// ======================================================
-
-// Same class me same roll number allowed nahi
-studentProfileSchema.index(
-  {
-    class: 1,
-    rollNumber: 1,
-  },
-  {
-    unique: true,
-  },
-);
-
-// Fast class + status listing + roll sorting
-studentProfileSchema.index({
-  class: 1,
-  status: 1,
-  rollNumber: 1,
+// NEW — institutionType ke hisaab se class/program required karta hai
+studentProfileSchema.pre("validate", function () {
+  if (this.institutionType === "SCHOOL" && !this.class) {
+    throw new Error("Class is required for a school student");
+  }
+  if (
+    this.institutionType === "COLLEGE" &&
+    (!this.program || !this.currentSemester)
+  ) {
+    throw new Error(
+      "Program and currentSemester are required for a college student",
+    );
+  }
 });
 
-// user already has unique:true + index:true
-
-// ======================================================
-// SELF EDITABLE FIELDS
-// ======================================================
+studentProfileSchema.index(
+  { class: 1, rollNumber: 1 },
+  { unique: true, partialFilterExpression: { class: { $type: "objectId" } } },
+);
+studentProfileSchema.index(
+  { program: 1, rollNumber: 1 },
+  { unique: true, partialFilterExpression: { program: { $type: "objectId" } } },
+);
+studentProfileSchema.index({ class: 1, status: 1, rollNumber: 1 });
+studentProfileSchema.index({ program: 1, currentSemester: 1, status: 1 });
 
 studentProfileSchema.statics.SELF_EDITABLE_FIELDS = [
   "bloodGroup",
@@ -434,12 +226,10 @@ studentProfileSchema.statics.SELF_EDITABLE_FIELDS = [
   "bio",
 ];
 
-// ======================================================
-// ADMIN EDITABLE FIELDS
-// ======================================================
-
 studentProfileSchema.statics.ADMIN_ONLY_FIELDS = [
   "class",
+  "program",
+  "currentSemester",
   "rollNumber",
   "status",
   "leftReason",
@@ -465,10 +255,8 @@ studentProfileSchema.statics.ADMIN_ONLY_FIELDS = [
   "medicalConditions",
 ];
 
-// ======================================================
-// DOCUMENT TYPES
-// ======================================================
-
 studentProfileSchema.statics.DOCUMENT_TYPES = DOCUMENT_TYPES;
 
-module.exports = mongoose.model("StudentProfile", studentProfileSchema);
+module.exports =
+  mongoose.models.StudentProfile ||
+  mongoose.model("StudentProfile", studentProfileSchema);

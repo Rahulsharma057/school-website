@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import PortalGuard from "@/components/PortalGuard";
-
+import ExcelResultImportExport from "@/components/ExcelResultImportExport";
 import {
-  Alert,
   Avatar,
   Box,
   Button,
@@ -23,6 +22,8 @@ import {
   TableRow,
   TextField,
   Typography,
+  Checkbox,
+  FormControlLabel,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
@@ -31,222 +32,486 @@ import {
   Assessment,
   CheckCircle,
   DoneAll,
-  ErrorOutline,
   Save,
   School,
-  WarningAmber,
+  EditRounded,
+  LockRounded,
 } from "@mui/icons-material";
 
 import { useMyAssignments } from "@/hooks/useTeacherAssignments";
 import { useExamsByClass } from "@/hooks/useExam";
 import { useStudentsByClass } from "@/hooks/useStudent";
 import { useEnterResult, useClassResults } from "@/hooks/useResult";
-import ExcelResultImportExport from "@/components/ExcelResultImportExport";
-
-// =====================================================
-// COLORS
-// =====================================================
 
 const COLORS = {
-  primary: "#4C1D95",
-  primaryDark: "#3B0764",
-  primaryDeep: "#2E1065",
-  accent: "#6D28D9",
-  accentLight: "#8B5CF6",
-
-  surfaceTint: "#F3ECFE",
-  border: "#DCC9FA",
-  bgPage: "#F6F3FC",
-
+  primary: "#5B21B6",
+  primaryDark: "#4C1D95",
+  primaryDeep: "#3B0764",
+  accent: "#7C3AED",
+  surfaceTint: "#FAF5FF",
+  border: "#E9D5FF",
+  bgPage: "#F8F7FC",
   textMuted: "#6B7280",
   textDark: "#1E1B2E",
-
-  error: "#B91C1C",
-  errorSoft: "#FEF2F2",
-
-  warning: "#B45309",
-  warningSoft: "#FFFBEB",
-
-  success: "#166534",
-  successSoft: "#DCFCE7",
+  lockedBg: "#F9FAFB",
+  lockedBorder: "#E5E7EB",
 };
 
-// =====================================================
-// VALIDATION
-// =====================================================
+/* =========================================================
+   HELPERS
+========================================================= */
 
-function validateMark(value, maxMarks) {
-  if (value === "" || value === undefined || value === null) {
-    return "Required";
+const normalizeId = (value) => {
+  if (!value) return "";
+
+  if (typeof value === "object") {
+    return String(value?._id || value?.id || "");
   }
 
-  const stringValue = String(value).trim();
+  return String(value);
+};
 
-  if (!/^\d+$/.test(stringValue)) {
-    return "Enter a valid number";
+/**
+ * Exam subject can come in different forms:
+ *
+ * subject: "..."
+ *
+ * OR
+ *
+ * subject: {
+ *   _id: "..."
+ * }
+ */
+const getSubjectId = (subject) => {
+  if (!subject) return "";
+
+  const rawSubject =
+    typeof subject === "object" ? (subject?.subject ?? subject) : subject;
+
+  return normalizeId(rawSubject);
+};
+
+const getSubjectName = (subject, index = 0) => {
+  return (
+    String(
+      subject?.subjectName || subject?.name || subject?.subject?.name || "",
+    ).trim() || `Subject ${index + 1}`
+  );
+};
+
+const getComponentName = (component, index = 0) => {
+  return (
+    String(component?.name || component?.title || "").trim() ||
+    `Component ${index + 1}`
+  );
+};
+
+const getStudentIdFromResult = (result) => {
+  return normalizeId(
+    result?.student?._id ||
+      result?.studentId?._id ||
+      result?.studentId ||
+      result?.student,
+  );
+};
+
+/**
+ * IMPORTANT:
+ * Never return empty key.
+ */
+const getSafeSubjectKey = (subject, index) => {
+  const subjectId = getSubjectId(subject);
+
+  if (subjectId) {
+    return `subject-${subjectId}`;
   }
 
-  const num = Number(stringValue);
+  return `subject-index-${index}`;
+};
 
-  if (!Number.isFinite(num)) {
-    return "Invalid";
-  }
+const getSafeComponentKey = (component, componentIndex, subjectIndex) => {
+  const componentName = getComponentName(component, componentIndex);
 
-  if (num < 0) {
-    return "Can't be negative";
-  }
+  return `component-${subjectIndex}-${componentIndex}-${componentName}`;
+};
 
-  if (num > Number(maxMarks)) {
-    return `Maximum ${maxMarks} marks allowed`;
-  }
-
-  return "";
-}
-
-// Don't clamp the value.
-// Whatever user enters stays visible.
-// Validation decides whether Save is allowed.
-function sanitizeMarkInput(rawValue) {
-  if (rawValue === "") return "";
-
-  // Only allow digits.
-  return String(rawValue).replace(/[^\d]/g, "");
-}
-
-// =====================================================
-// MAIN CONTENT
-// =====================================================
-
+/* =========================================================
+   MAIN
+========================================================= */
 function ResultsEntryContent() {
   const theme = useTheme();
+
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const {
-    data: assignments = [],
-    isLoading: assignmentsLoading,
-  } = useMyAssignments();
+  /* =====================================================
+     ASSIGNMENTS
+  ===================================================== */
+
+  const { data: assignments = [], isLoading: assignmentsLoading } =
+    useMyAssignments();
 
   const myClasses = useMemo(() => {
     const map = new Map();
 
     assignments.forEach((assignment) => {
-      if (assignment.class?._id) {
-        map.set(assignment.class._id, assignment.class);
+      const classId = assignment?.class?._id;
+
+      if (classId) {
+        map.set(String(classId), assignment.class);
       }
     });
 
     return [...map.values()];
   }, [assignments]);
 
+  /* =====================================================
+     CLASS / EXAM
+  ===================================================== */
+
   const [classId, setClassId] = useState("");
   const [examId, setExamId] = useState("");
 
-  const {
-    data: exams = [],
-    isLoading: examsLoading,
-  } = useExamsByClass(classId);
+  const { data: examsData, isLoading: examsLoading } = useExamsByClass(classId);
 
-  const {
-    data: studentsData,
-    isLoading: studentsLoading,
-  } = useStudentsByClass(classId);
+  const exams = useMemo(() => {
+    if (Array.isArray(examsData)) {
+      return examsData;
+    }
 
-  const students = studentsData?.students ?? [];
+    return examsData?.data || examsData?.exams || [];
+  }, [examsData]);
 
-  const {
-    data: results = [],
-  } = useClassResults(examId);
+  const { data: studentsData, isLoading: studentsLoading } =
+    useStudentsByClass(classId);
 
-  const {
-    mutate: enterResult,
-    isPending,
-  } = useEnterResult();
+  const students = Array.isArray(studentsData)
+    ? studentsData
+    : (studentsData?.students ?? []);
 
-  const selectedExam = exams.find((exam) => exam._id === examId);
+  const { data: results = [], isLoading: resultsLoading } =
+    useClassResults(examId);
 
-  // =====================================================
-  // LOCAL FORM STATE
-  // =====================================================
+  const { mutate: enterResult, isPending } = useEnterResult();
+
+  const selectedExam = useMemo(() => {
+    return exams.find((exam) => String(exam?._id) === String(examId));
+  }, [exams, examId]);
+
+  const examSubjects = useMemo(() => {
+    if (!Array.isArray(selectedExam?.subjects)) {
+      return [];
+    }
+
+    return selectedExam.subjects;
+  }, [selectedExam]);
+
+  /* =====================================================
+     FORM STATE
+  ===================================================== */
 
   const [marksForm, setMarksForm] = useState({});
+  const [absentMap, setAbsentMap] = useState({});
   const [savedIds, setSavedIds] = useState({});
   const [savingIds, setSavingIds] = useState({});
   const [savingAll, setSavingAll] = useState(false);
-  const [saveAllError, setSaveAllError] = useState("");
 
-  // =====================================================
-  // RESET WHEN EXAM CHANGES
-  // =====================================================
+  /*
+    LOCKED IDS
+    ---------------------------------------------------
+    true  -> row is locked (read-only), showing "Edit" button
+    false / undefined -> row is editable, showing "Save" button
+  */
+  const [lockedIds, setLockedIds] = useState({});
+
+  /* =====================================================
+     HYDRATION GUARD
+     ---------------------------------------------------
+     Prevents "Save All" / consecutive saves from wiping
+     unsaved marks. queryClient.invalidateQueries in
+     useEnterResult triggers a background refetch of
+     `results` after EVERY save, which used to cause the
+     "load existing results" effect below to overwrite
+     the whole marksForm — deleting anything not yet
+     saved. We now hydrate from `results` only once per
+     exam, and re-arm when class/exam actually changes.
+  ===================================================== */
+
+  const hydratedForRef = useRef("");
+
+  /* =====================================================
+     RESET
+  ===================================================== */
 
   useEffect(() => {
     setMarksForm({});
+    setAbsentMap({});
     setSavedIds({});
     setSavingIds({});
-    setSaveAllError("");
-  }, [examId]);
+    setLockedIds({});
+    hydratedForRef.current = "";
+  }, [classId, examId]);
 
-  // =====================================================
-  // LOAD SERVER RESULTS
-  // =====================================================
+  /* =====================================================
+     STUDENT HELPERS
+  ===================================================== */
+
+  const getStudentId = (student) => {
+    return normalizeId(
+      student?.user?._id || student?._id || student?.user?.id || student?.id,
+    );
+  };
+
+  const getStudentName = (student) => {
+    return (
+      student?.user?.name ||
+      student?.name ||
+      student?.fullName ||
+      "Unknown Student"
+    );
+  };
+
+  /* =====================================================
+     FIND EXISTING STUDENT RESULT
+  ===================================================== */
+
+  const getExistingStudentResult = (studentId) => {
+    if (!Array.isArray(results)) {
+      return null;
+    }
+
+    return (
+      results.find(
+        (result) => getStudentIdFromResult(result) === String(studentId),
+      ) || null
+    );
+  };
+
+  /* =====================================================
+     FIND EXISTING SUBJECT RESULT
+  ===================================================== */
+
+  const getExistingSubjectResult = (studentId, subjectId) => {
+    const existingResult = getExistingStudentResult(studentId);
+
+    if (!existingResult) {
+      return null;
+    }
+
+    const marks = Array.isArray(existingResult?.marks)
+      ? existingResult.marks
+      : [];
+
+    return (
+      marks.find((mark) => {
+        const existingSubjectId = normalizeId(
+          mark?.subject?._id ||
+            mark?.subjectId?._id ||
+            mark?.subjectId ||
+            mark?.subject,
+        );
+
+        return existingSubjectId === String(subjectId);
+      }) || null
+    );
+  };
+
+  /* =====================================================
+     EXISTING COMPONENT VALUE
+  ===================================================== */
+
+  const getExistingComponentValue = (studentId, subjectId, componentName) => {
+    const subjectResult = getExistingSubjectResult(studentId, subjectId);
+
+    if (!subjectResult) {
+      return "";
+    }
+
+    const components = Array.isArray(subjectResult?.components)
+      ? subjectResult.components
+      : [];
+
+    const component = components.find((item) => {
+      const existingName = String(
+        item?.component?.name || item?.component || item?.name || "",
+      )
+        .trim()
+        .toLowerCase();
+
+      return (
+        existingName ===
+        String(componentName || "")
+          .trim()
+          .toLowerCase()
+      );
+    });
+
+    if (!component) {
+      return "";
+    }
+
+    return component?.marksObtained ?? component?.marks ?? "";
+  };
+
+  /* =====================================================
+     EXISTING SIMPLE SUBJECT VALUE
+  ===================================================== */
+
+  const getExistingSimpleSubjectValue = (studentId, subjectId) => {
+    const subjectResult = getExistingSubjectResult(studentId, subjectId);
+
+    if (!subjectResult) {
+      return "";
+    }
+
+    return subjectResult?.marksObtained ?? subjectResult?.marks ?? "";
+  };
+
+  /* =====================================================
+     EXISTING STATUS
+  ===================================================== */
+
+  const getExistingSubjectStatus = (studentId, subjectId) => {
+    const subjectResult = getExistingSubjectResult(studentId, subjectId);
+
+    return subjectResult?.status || "PRESENT";
+  };
+
+  /* =====================================================
+     LOAD EXISTING RESULTS
+     (hydrates form ONCE per exam — see hydratedForRef)
+  ===================================================== */
 
   useEffect(() => {
-    if (!selectedExam || !results.length) return;
+    if (
+      !selectedExam ||
+      !Array.isArray(students) ||
+      !students.length ||
+      !Array.isArray(results)
+    ) {
+      return;
+    }
 
-    setMarksForm((prev) => {
-      const next = { ...prev };
+    if (!results.length) {
+      return;
+    }
 
-      results.forEach((result) => {
-        const studentId = result.student?._id;
+    // Already hydrated for this exam -> don't let a
+    // background refetch overwrite in-progress edits.
+    if (hydratedForRef.current === examId) {
+      return;
+    }
 
-        if (!studentId) return;
+    const nextMarksForm = {};
+    const nextAbsentMap = {};
+    const nextLockedIds = {};
+    const nextSavedIds = {};
 
-        const existing = next[studentId] || {};
-        const merged = { ...existing };
+    students.forEach((student) => {
+      const studentId = getStudentId(student);
 
-        (result.marks || []).forEach((mark) => {
-          if (merged[mark.subject] === undefined) {
-            merged[mark.subject] = String(mark.marksObtained);
+      if (!studentId) {
+        return;
+      }
+
+      const existingResult = getExistingStudentResult(studentId);
+
+      if (!existingResult) {
+        return;
+      }
+
+      const existingMarks = Array.isArray(existingResult?.marks)
+        ? existingResult.marks
+        : [];
+
+      const hasAbsentSubject =
+        existingMarks.length > 0 &&
+        existingMarks.every((mark) => mark?.status === "ABSENT");
+
+      nextAbsentMap[studentId] = hasAbsentSubject;
+
+      const studentMarks = {};
+
+      const examSubjectsList = Array.isArray(selectedExam?.subjects)
+        ? selectedExam.subjects
+        : [];
+
+      examSubjectsList.forEach((subject, subjectIndex) => {
+        const subjectId = getSubjectId(subject);
+
+        if (!subjectId) {
+          return;
+        }
+
+        const components = Array.isArray(subject?.components)
+          ? subject.components
+          : [];
+
+        if (components.length > 0) {
+          const componentValues = {};
+
+          components.forEach((component, componentIndex) => {
+            const componentName = getComponentName(component, componentIndex);
+
+            const value = getExistingComponentValue(
+              studentId,
+              subjectId,
+              componentName,
+            );
+
+            if (value !== "") {
+              componentValues[componentName] = value;
+            }
+          });
+
+          if (Object.keys(componentValues).length > 0) {
+            studentMarks[subjectId] = componentValues;
           }
-        });
+        } else {
+          const value = getExistingSimpleSubjectValue(studentId, subjectId);
 
-        next[studentId] = merged;
+          if (value !== "") {
+            studentMarks[subjectId] = {
+              Marks: value,
+            };
+          }
+        }
       });
 
-      return next;
+      nextMarksForm[studentId] = studentMarks;
+
+      // Already-saved result -> lock the row by default.
+      nextLockedIds[studentId] = true;
+      nextSavedIds[studentId] = true;
     });
-  }, [results, selectedExam]);
 
-  // =====================================================
-  // HELPERS
-  // =====================================================
+    setMarksForm(nextMarksForm);
+    setAbsentMap(nextAbsentMap);
+    setLockedIds((prev) => ({ ...prev, ...nextLockedIds }));
+    setSavedIds((prev) => ({ ...prev, ...nextSavedIds }));
 
-  const getStudentId = (student) =>
-    student.user?._id || student._id;
+    hydratedForRef.current = examId;
+  }, [selectedExam, students, results, examId]);
 
-  const getStudentName = (student) =>
-    student.user?.name ||
-    student.name ||
-    "Unknown Student";
+  /* =====================================================
+     HANDLE MARK CHANGE
+  ===================================================== */
 
-  const getMarkValue = (studentId, subject) =>
-    marksForm[studentId]?.[subject] ?? "";
-
-  // =====================================================
-  // MARK CHANGE
-  // =====================================================
-
-  const handleMarkChange = (
-    studentId,
-    subject,
-    rawValue
-  ) => {
-    const cleanValue = sanitizeMarkInput(rawValue);
+  const handleMarkChange = (studentId, subjectId, componentName, value) => {
+    if (!studentId || !subjectId) {
+      return;
+    }
 
     setMarksForm((prev) => ({
       ...prev,
+
       [studentId]: {
-        ...(prev[studentId] || {}),
-        [subject]: cleanValue,
+        ...prev[studentId],
+
+        [subjectId]: {
+          ...prev[studentId]?.[subjectId],
+
+          [componentName]: value,
+        },
       },
     }));
 
@@ -254,70 +519,139 @@ function ResultsEntryContent() {
       ...prev,
       [studentId]: false,
     }));
-
-    setSaveAllError("");
   };
 
-  // =====================================================
-  // ROW VALIDATION
-  // =====================================================
+  /* =====================================================
+     TOGGLE ABSENT
+  ===================================================== */
 
-  const getRowErrors = (studentId) => {
-    if (!selectedExam) return {};
+  const toggleAbsent = (studentId) => {
+    if (!studentId) {
+      return;
+    }
 
-    const errors = {};
+    // Locked (already-saved) row -> must hit Edit first
+    if (lockedIds[studentId]) {
+      return;
+    }
 
-    selectedExam.subjects.forEach((subject) => {
-      const value = getMarkValue(
-        studentId,
-        subject.subject
-      );
+    setAbsentMap((prev) => ({
+      ...prev,
+      [studentId]: !prev[studentId],
+    }));
 
-      const error = validateMark(
-        value,
-        subject.maxMarks
-      );
-
-      if (error) {
-        errors[subject.subject] = error;
-      }
-    });
-
-    return errors;
-  };
-
-  const hasRowErrors = (studentId) => {
-    return Object.keys(getRowErrors(studentId)).length > 0;
-  };
-
-  // =====================================================
-  // PAYLOAD
-  // =====================================================
-
-  const buildMarksPayload = (studentId) => {
-    if (!selectedExam) return [];
-
-    return selectedExam.subjects.map((subject) => ({
-      subject: subject.subject,
-      marksObtained: Number(
-        getMarkValue(
-          studentId,
-          subject.subject
-        )
-      ),
+    setSavedIds((prev) => ({
+      ...prev,
+      [studentId]: false,
     }));
   };
 
-  // =====================================================
-  // SAVE SINGLE STUDENT
-  // =====================================================
+  /* =====================================================
+     BUILD MARKS PAYLOAD
+  ===================================================== */
+
+  const buildMarksPayload = (studentId) => {
+    if (!selectedExam) {
+      return [];
+    }
+
+    const isAbsent = Boolean(absentMap[studentId]);
+
+    const examSubjectsList = Array.isArray(selectedExam?.subjects)
+      ? selectedExam.subjects
+      : [];
+
+    return examSubjectsList
+      .map((subject) => {
+        const subjectId = getSubjectId(subject);
+
+        if (!subjectId) {
+          return null;
+        }
+
+        const components = Array.isArray(subject?.components)
+          ? subject.components
+          : [];
+
+        /* =============================================
+           COMPONENT SUBJECT
+        ============================================= */
+
+        if (components.length > 0) {
+          return {
+            subject: subjectId,
+
+            status: isAbsent ? "ABSENT" : "PRESENT",
+
+            components: components.map((component, componentIndex) => {
+              const componentName = getComponentName(component, componentIndex);
+
+              const rawValue =
+                marksForm?.[studentId]?.[subjectId]?.[componentName];
+
+              const marksObtained =
+                rawValue === undefined || rawValue === null || rawValue === ""
+                  ? undefined
+                  : Number(rawValue);
+
+              return {
+                component: componentName,
+
+                ...(isAbsent
+                  ? {
+                      marksObtained: 0,
+                      status: "ABSENT",
+                    }
+                  : {
+                      ...(marksObtained !== undefined
+                        ? {
+                            marksObtained,
+                          }
+                        : {}),
+
+                      status: "PRESENT",
+                    }),
+              };
+            }),
+          };
+        }
+
+        /* =============================================
+           SIMPLE SUBJECT
+        ============================================= */
+
+        const rawValue = marksForm?.[studentId]?.[subjectId]?.Marks;
+
+        const marksObtained =
+          rawValue === undefined || rawValue === null || rawValue === ""
+            ? undefined
+            : Number(rawValue);
+
+        return {
+          subject: subjectId,
+
+          status: isAbsent ? "ABSENT" : "PRESENT",
+
+          ...(isAbsent
+            ? {
+                marksObtained: 0,
+              }
+            : marksObtained !== undefined
+              ? {
+                  marksObtained,
+                }
+              : {}),
+        };
+      })
+      .filter(Boolean);
+  };
+
+  /* =====================================================
+     SAVE SINGLE
+  ===================================================== */
 
   const handleSave = (studentId) => {
-    if (!selectedExam) return;
-
-    const rowErrors = getRowErrors(studentId);
-
-    if (Object.keys(rowErrors).length > 0) {
+    if (!selectedExam || !studentId) {
       return;
     }
 
@@ -338,6 +672,12 @@ function ResultsEntryContent() {
             ...prev,
             [studentId]: true,
           }));
+
+          // Lock the row right after a successful save.
+          setLockedIds((prev) => ({
+            ...prev,
+            [studentId]: true,
+          }));
         },
 
         onSettled: () => {
@@ -346,38 +686,31 @@ function ResultsEntryContent() {
             [studentId]: false,
           }));
         },
-      }
+      },
     );
   };
 
-  // =====================================================
-  // SAVE ALL
-  // =====================================================
+  /* =====================================================
+     EDIT (UNLOCK) SINGLE ROW
+  ===================================================== */
+
+  const handleEdit = (studentId) => {
+    if (!studentId) {
+      return;
+    }
+
+    setLockedIds((prev) => ({
+      ...prev,
+      [studentId]: false,
+    }));
+  };
+
+  /* =====================================================
+     SAVE ALL
+  ===================================================== */
 
   const handleSaveAll = async () => {
-    if (!selectedExam || !students.length) return;
-
-    setSaveAllError("");
-
-    let invalidCount = 0;
-
-    students.forEach((student) => {
-      const studentId = getStudentId(student);
-
-      if (!studentId) return;
-
-      if (hasRowErrors(studentId)) {
-        invalidCount += 1;
-      }
-    });
-
-    if (invalidCount > 0) {
-      setSaveAllError(
-        `Fix ${invalidCount} student${
-          invalidCount === 1 ? "" : "s"
-        } with invalid or missing marks before saving all.`
-      );
-
+    if (!selectedExam || !students.length) {
       return;
     }
 
@@ -386,7 +719,14 @@ function ResultsEntryContent() {
     for (const student of students) {
       const studentId = getStudentId(student);
 
-      if (!studentId) continue;
+      if (!studentId) {
+        continue;
+      }
+
+      // Skip rows that are already locked / saved and untouched.
+      if (lockedIds[studentId]) {
+        continue;
+      }
 
       await new Promise((resolve) => {
         enterResult(
@@ -401,10 +741,17 @@ function ResultsEntryContent() {
                 ...prev,
                 [studentId]: true,
               }));
+
+              setLockedIds((prev) => ({
+                ...prev,
+                [studentId]: true,
+              }));
             },
 
-            onSettled: resolve,
-          }
+            onSettled: () => {
+              resolve();
+            },
+          },
         );
       });
     }
@@ -412,78 +759,70 @@ function ResultsEntryContent() {
     setSavingAll(false);
   };
 
-  // =====================================================
-  // COUNTS
-  // =====================================================
+  /* =====================================================
+     SAVED COUNT
+  ===================================================== */
 
-  const savedCount = useMemo(
-    () =>
-      Object.values(savedIds).filter(Boolean).length,
-    [savedIds]
-  );
+  const savedCount = useMemo(() => {
+    return Object.values(savedIds).filter(Boolean).length;
+  }, [savedIds]);
 
-  const invalidStudentCount = useMemo(() => {
-    if (!selectedExam || !students.length) return 0;
-
-    return students.reduce((count, student) => {
-      const studentId = getStudentId(student);
-
-      if (!studentId) return count;
-
-      return hasRowErrors(studentId)
-        ? count + 1
-        : count;
-    }, 0);
-  }, [students, selectedExam, marksForm]);
-
-  // =====================================================
-  // RENDER
-  // =====================================================
+  /* =====================================================
+     RENDER
+  ===================================================== */
 
   return (
     <Box>
-      {/* HEADER */}
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
       <Box
         sx={{
-          mb: 1.25,
+          mb: 2.5,
           display: "flex",
           alignItems: "center",
-          gap: 1,
+          gap: 1.5,
         }}
       >
         <Avatar
           sx={{
-            width: { xs: 32, sm: 36 },
-            height: { xs: 32, sm: 36 },
-            background: `linear-gradient(
-              135deg,
-              ${COLORS.accent},
-              ${COLORS.primaryDark}
-            )`,
-            boxShadow:
-              "0 3px 10px rgba(76,29,149,0.25)",
+            width: {
+              xs: 40,
+              sm: 46,
+            },
+            height: {
+              xs: 40,
+              sm: 46,
+            },
+            background: `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.primaryDark})`,
+            color: "#fff",
+            boxShadow: "0 4px 14px rgba(91,33,182,0.35)",
           }}
         >
-          <Assessment sx={{ fontSize: 18 }} />
+          <Assessment fontSize="small" />
         </Avatar>
 
         <Box>
           <Typography
             sx={{
-              fontSize: { xs: 16, sm: 18 },
+              fontSize: {
+                xs: 19,
+                sm: 21,
+                md: 25,
+              },
               fontWeight: 800,
               color: COLORS.textDark,
-              lineHeight: 1.1,
             }}
           >
             Enter Results
           </Typography>
 
           <Typography
+            variant="body2"
             sx={{
-              fontSize: 11,
               color: COLORS.textMuted,
+              mt: 0.3,
             }}
           >
             Enter marks for your assigned classes
@@ -491,36 +830,41 @@ function ResultsEntryContent() {
         </Box>
       </Box>
 
-      {/* FILTERS */}
+      {/* =================================================
+          SELECT CLASS / EXAM
+      ================================================= */}
 
       <Paper elevation={0} sx={cardSx}>
         <Box
           sx={{
-            px: 1.25,
-            py: 0.7,
-            background: `linear-gradient(
-              90deg,
-              ${COLORS.primaryDeep},
-              ${COLORS.primaryDark}
-            )`,
+            px: {
+              xs: 1.5,
+              md: 2,
+            },
+            py: 1.25,
+            background: `linear-gradient(90deg, ${COLORS.primaryDeep}, ${COLORS.primaryDark})`,
             color: "#fff",
           }}
         >
-          <Typography
-            fontSize={11.5}
-            fontWeight={800}
-          >
+          <Typography fontSize={14} fontWeight={800}>
             Select Class & Exam
           </Typography>
         </Box>
 
-        <Box sx={{ p: 1.25 }}>
+        <Box
+          sx={{
+            p: {
+              xs: 1.5,
+              md: 2,
+            },
+          }}
+        >
           <Stack
             direction={{
               xs: "column",
               sm: "row",
             }}
-            spacing={0.75}
+            spacing={1.5}
             alignItems={{
               xs: "stretch",
               sm: "center",
@@ -536,20 +880,26 @@ function ResultsEntryContent() {
                 setExamId("");
               }}
               disabled={assignmentsLoading}
-              sx={selectSx}
+              sx={{
+                minWidth: {
+                  sm: 220,
+                },
+              }}
             >
               <MenuItem value="" disabled>
-                {assignmentsLoading
-                  ? "Loading classes..."
-                  : "Select Class"}
+                {assignmentsLoading ? "Loading classes..." : "Select Class"}
               </MenuItem>
 
-              {myClasses.map((item) => (
+              {myClasses.map((classItem, index) => (
                 <MenuItem
-                  key={item._id}
-                  value={item._id}
+                  key={
+                    classItem?._id
+                      ? `class-${classItem._id}`
+                      : `class-index-${index}`
+                  }
+                  value={classItem?._id || ""}
                 >
-                  {item.className} - {item.section}
+                  {classItem?.className} - {classItem?.section}
                 </MenuItem>
               ))}
             </Select>
@@ -559,26 +909,28 @@ function ResultsEntryContent() {
               size="small"
               fullWidth={isMobile}
               value={examId}
-              onChange={(event) =>
-                setExamId(event.target.value)
-              }
+              onChange={(event) => setExamId(event.target.value)}
               disabled={!classId || examsLoading}
-              sx={selectSx}
+              sx={{
+                minWidth: {
+                  sm: 220,
+                },
+              }}
             >
               <MenuItem value="" disabled>
                 {!classId
                   ? "Select a class first"
                   : examsLoading
-                  ? "Loading exams..."
-                  : "Select Exam"}
+                    ? "Loading exams..."
+                    : "Select Exam"}
               </MenuItem>
 
-              {exams.map((exam) => (
+              {exams.map((exam, index) => (
                 <MenuItem
-                  key={exam._id}
-                  value={exam._id}
+                  key={exam?._id ? `exam-${exam._id}` : `exam-index-${index}`}
+                  value={exam?._id || ""}
                 >
-                  {exam.examName}
+                  {exam?.examName}
                 </MenuItem>
               ))}
             </Select>
@@ -587,7 +939,11 @@ function ResultsEntryContent() {
               <Chip
                 size="small"
                 icon={
-                  <School sx={{ fontSize: 14 }} />
+                  <School
+                    sx={{
+                      fontSize: 16,
+                    }}
+                  />
                 }
                 label={`${students.length} student${
                   students.length === 1 ? "" : "s"
@@ -597,12 +953,9 @@ function ResultsEntryContent() {
                     xs: "flex-start",
                     sm: "center",
                   },
-                  backgroundColor:
-                    COLORS.surfaceTint,
+                  backgroundColor: COLORS.surfaceTint,
                   color: COLORS.primaryDark,
                   fontWeight: 700,
-                  height: 24,
-                  fontSize: 11,
                 }}
               />
             )}
@@ -610,25 +963,16 @@ function ResultsEntryContent() {
         </Box>
       </Paper>
 
-      {/* EXCEL */}
+      {/* =================================================
+          EMPTY STATES
+      ================================================= */}
 
-      {selectedExam && (
-        <ExcelResultImportExport
-          examId={examId}
-          examName={selectedExam.examName}
-          subjects={selectedExam.subjects}
+      {!assignmentsLoading && myClasses.length === 0 && (
+        <EmptyState
+          title="No classes assigned"
+          subtitle="You are not assigned to any class yet."
         />
       )}
-
-      {/* EMPTY STATES */}
-
-      {!assignmentsLoading &&
-        myClasses.length === 0 && (
-          <EmptyState
-            title="No classes assigned"
-            subtitle="You are not assigned to any class yet."
-          />
-        )}
 
       {myClasses.length > 0 && !classId && (
         <EmptyState
@@ -638,108 +982,98 @@ function ResultsEntryContent() {
       )}
 
       {classId && studentsLoading && (
-        <Stack spacing={0.75}>
-          <Skeleton
-            variant="rounded"
-            height={34}
-          />
-          <Skeleton
-            variant="rounded"
-            height={150}
-          />
+        <Stack spacing={1}>
+          <Skeleton variant="rounded" height={48} />
+          <Skeleton variant="rounded" height={220} />
         </Stack>
       )}
 
-      {classId &&
-        !studentsLoading &&
-        !students.length && (
-          <EmptyState
-            title="No students found"
-            subtitle="This class doesn't have any students yet."
-          />
-        )}
+      {classId && !studentsLoading && !students.length && (
+        <EmptyState
+          title="No students found"
+          subtitle="This class doesn't have any students yet."
+        />
+      )}
 
-      {classId &&
-        students.length > 0 &&
-        !examId && (
-          <EmptyState
-            title="Select an exam"
-            subtitle="Choose an exam above to enter or view marks."
-          />
-        )}
+      {classId && students.length > 0 && !examId && (
+        <EmptyState
+          title="Select an exam"
+          subtitle="Choose an exam above to enter or view marks."
+        />
+      )}
 
-      {/* RESULT ENTRY */}
+      {/* =================================================
+          EXCEL IMPORT / EXPORT
+      ================================================= */}
+
+      {selectedExam && examSubjects.length > 0 && students.length > 0 && (
+        <ExcelResultImportExport
+          examId={examId}
+          examName={selectedExam.examName}
+          subjects={examSubjects}
+        />
+      )}
+
+      {/* =================================================
+          RESULTS
+      ================================================= */}
 
       {selectedExam && students.length > 0 && (
         <Paper elevation={0} sx={cardSx}>
-          {/* TABLE HEADER */}
+          {/* HEADER */}
 
           <Box
             sx={{
-              px: 1.25,
-              py: 0.8,
+              px: {
+                xs: 1.5,
+                md: 2,
+              },
+              py: 1.5,
               display: "flex",
               alignItems: {
                 xs: "flex-start",
                 sm: "center",
               },
               justifyContent: "space-between",
-              gap: 1,
+              gap: 1.5,
               flexWrap: "wrap",
+              backgroundColor: "#fff",
             }}
           >
             <Box>
-              <Typography
-                fontSize={13}
-                fontWeight={800}
-                color={COLORS.textDark}
-              >
+              <Typography fontSize={15} fontWeight={800} color="#1F2937">
                 {selectedExam.examName}
               </Typography>
 
-              <Typography
-                sx={{
-                  fontSize: 10.5,
-                  color: COLORS.textMuted,
-                }}
-              >
-                {selectedExam.subjects.length} subject
-                {selectedExam.subjects.length === 1
-                  ? ""
-                  : "s"}
+              <Typography variant="caption" color="text.secondary">
+                {selectedExam.subjects?.length} subject
+                {selectedExam.subjects?.length === 1 ? "" : "s"}
               </Typography>
             </Box>
 
             <Stack
               direction="row"
-              spacing={0.6}
+              spacing={1}
               alignItems="center"
               flexWrap="wrap"
               useFlexGap
             >
-              {invalidStudentCount > 0 && (
-                <Chip
-                  size="small"
-                  icon={
-                    <WarningAmber
-                      sx={{ fontSize: 14 }}
-                    />
-                  }
-                  label={`${invalidStudentCount} invalid`}
-                  sx={warningChipSx}
-                />
-              )}
-
               {savedCount > 0 && (
                 <Chip
                   size="small"
                   icon={
                     <CheckCircle
-                      sx={{ fontSize: 14 }}
+                      sx={{
+                        fontSize: 16,
+                      }}
                     />
                   }
                   label={`${savedCount} saved`}
-                  sx={successChipSx}
+                  sx={{
+                    backgroundColor: "#DCFCE7",
+                    color: "#166534",
+                    fontWeight: 700,
+                  }}
                 />
               )}
 
@@ -747,100 +1081,90 @@ function ResultsEntryContent() {
                 size="small"
                 variant="contained"
                 startIcon={
-                  <DoneAll sx={{ fontSize: 15 }} />
+                  <DoneAll
+                    sx={{
+                      fontSize: 16,
+                    }}
+                  />
                 }
                 onClick={handleSaveAll}
-                disabled={
-                  savingAll ||
-                  isPending ||
-                  invalidStudentCount > 0
-                }
+                disabled={savingAll || isPending}
                 fullWidth={isMobile}
-                sx={btnSaveAll}
+                sx={{
+                  ...btnSaveAll,
+                  minWidth: 140,
+                }}
               >
-                {savingAll
-                  ? "Saving..."
-                  : "Save All"}
+                {savingAll ? "Saving All..." : "Save All"}
               </Button>
             </Stack>
           </Box>
 
-          {saveAllError && (
-            <Alert
-              severity="error"
-              icon={
-                <ErrorOutline fontSize="small" />
-              }
-              sx={{
-                mx: 1.25,
-                mb: 0.75,
-                py: 0,
-                fontSize: 11.5,
-                borderRadius: 1.25,
-              }}
-            >
-              {saveAllError}
-            </Alert>
-          )}
-
           <Divider />
 
-          {/* DESKTOP */}
+          {/* =================================================
+                DESKTOP
+            ================================================= */}
 
-          {!isMobile && (
+          {!isMobile ? (
             <TableContainer
               sx={{
                 overflowX: "auto",
+                maxHeight: 640,
               }}
             >
               <Table
-                size="small"
+                stickyHeader
                 sx={{
-                  minWidth: 640,
-                  "& .MuiTableCell-root": {
-                    borderColor: "#EEE8F8",
-                  },
+                  minWidth: 720,
                 }}
               >
                 <TableHead>
-                  <TableRow
-                    sx={{
-                      backgroundColor:
-                        COLORS.surfaceTint,
-                    }}
-                  >
-                    <TableCell sx={headCellSx}>
-                      Student
-                    </TableCell>
+                  <TableRow>
+                    <TableCell sx={headCellSx}>Student</TableCell>
 
-                    {selectedExam.subjects.map(
-                      (subject) => (
-                        <TableCell
-                          key={subject.subject}
-                          sx={headCellSx}
-                        >
-                          {subject.subject}
+                    <TableCell sx={headCellSx}>Absent</TableCell>
 
-                          <Typography
-                            component="span"
-                            sx={{
-                              display: "block",
-                              fontWeight: 500,
-                              fontSize: 9.5,
-                              color:
-                                COLORS.textMuted,
-                            }}
+                    {(selectedExam.subjects || []).map(
+                      (subject, subjectIndex) => {
+                        const subjectName = getSubjectName(
+                          subject,
+                          subjectIndex,
+                        );
+
+                        const subjectKey = getSafeSubjectKey(
+                          subject,
+                          subjectIndex,
+                        );
+
+                        return (
+                          <TableCell
+                            key={`header-${subjectKey}`}
+                            sx={headCellSx}
                           >
-                            max {subject.maxMarks}
-                          </Typography>
-                        </TableCell>
-                      )
+                            {subjectName}
+
+                            <Typography
+                              component="span"
+                              sx={{
+                                display: "block",
+                                fontWeight: 500,
+                                fontSize: 11,
+                                color: COLORS.textMuted,
+                              }}
+                            >
+                              max {subject?.maxMarks}
+                            </Typography>
+                          </TableCell>
+                        );
+                      },
                     )}
 
                     <TableCell
                       sx={{
                         ...headCellSx,
                         textAlign: "right",
+                        minWidth: 110,
                       }}
                     >
                       Action
@@ -849,214 +1173,277 @@ function ResultsEntryContent() {
                 </TableHead>
 
                 <TableBody>
-                  {students.map((student) => {
-                    const studentId =
-                      getStudentId(student);
+                  {students.map((student, studentIndex) => {
+                    const studentId = getStudentId(student);
 
-                    const name =
-                      getStudentName(student);
+                    if (!studentId) {
+                      return null;
+                    }
 
-                    const isSaved =
-                      savedIds[studentId];
+                    const isSaved = savedIds[studentId];
 
-                    const isRowSaving =
-                      savingIds[studentId];
+                    const isRowSaving = savingIds[studentId];
 
-                    const rowErrors =
-                      getRowErrors(studentId);
+                    const isAbsent = Boolean(absentMap[studentId]);
 
-                    const hasError =
-                      Object.keys(rowErrors).length >
-                      0;
+                    const isLocked = Boolean(lockedIds[studentId]);
+
+                    const isDisabled = isLocked || isRowSaving || savingAll;
+
+                    const name = getStudentName(student);
 
                     return (
                       <TableRow
-                        key={`${studentId}-${examId}`}
-                        hover
+                        key={`student-row-${studentId}-${examId || studentIndex}`}
+                        hover={!isLocked}
                         sx={{
-                          backgroundColor: hasError
-                            ? COLORS.errorSoft
-                            : "#fff",
-
                           "&:last-child td": {
                             borderBottom: 0,
                           },
-
-                          "& td": {
-                            py: 0.55,
-                          },
+                          backgroundColor: isLocked
+                            ? COLORS.lockedBg
+                            : "transparent",
+                          transition: "background-color 0.15s ease",
                         }}
                       >
-                        {/* STUDENT */}
-
                         <TableCell>
                           <Stack
                             direction="row"
-                            spacing={0.75}
+                            spacing={1.2}
                             alignItems="center"
                           >
                             <Avatar
                               sx={{
-                                width: 26,
-                                height: 26,
-                                bgcolor:
-                                  COLORS.primary,
-                                fontSize: 10.5,
+                                width: 32,
+                                height: 32,
+                                bgcolor: isLocked
+                                  ? COLORS.textMuted
+                                  : COLORS.primary,
+                                fontSize: 13,
                                 fontWeight: 800,
                               }}
                             >
-                              {name
-                                .charAt(0)
-                                .toUpperCase()}
+                              {name.charAt(0).toUpperCase()}
                             </Avatar>
 
-                            <Typography
-                              fontSize={12}
-                              fontWeight={600}
-                              noWrap
-                            >
-                              {name}
-                            </Typography>
+                            <Box>
+                              <Typography variant="body2" fontWeight={600}>
+                                {name}
+                              </Typography>
+
+                              {isLocked && (
+                                <Stack
+                                  direction="row"
+                                  spacing={0.4}
+                                  alignItems="center"
+                                >
+                                  <LockRounded
+                                    sx={{
+                                      fontSize: 12,
+                                      color: COLORS.textMuted,
+                                    }}
+                                  />
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    Saved · locked
+                                  </Typography>
+                                </Stack>
+                              )}
+                            </Box>
                           </Stack>
                         </TableCell>
 
-                        {/* SUBJECTS */}
+                        <TableCell>
+                          <Checkbox
+                            size="small"
+                            checked={isAbsent}
+                            disabled={isDisabled}
+                            onChange={() => toggleAbsent(studentId)}
+                          />
+                        </TableCell>
 
-                        {selectedExam.subjects.map(
-                          (subject) => {
-                            const value =
-                              getMarkValue(
-                                studentId,
-                                subject.subject
+                        {(selectedExam.subjects || []).map(
+                          (subject, subjectIndex) => {
+                            const subjectId = getSubjectId(subject);
+
+                            const subjectKey = getSafeSubjectKey(
+                              subject,
+                              subjectIndex,
+                            );
+
+                            const subjectName = getSubjectName(
+                              subject,
+                              subjectIndex,
+                            );
+
+                            const components = Array.isArray(
+                              subject?.components,
+                            )
+                              ? subject.components
+                              : [];
+
+                            /*
+                             * If backend subject ID
+                             * is missing, don't create
+                             * broken form state.
+                             */
+
+                            if (!subjectId) {
+                              return (
+                                <TableCell
+                                  key={`missing-subject-${studentId}-${subjectKey}`}
+                                >
+                                  <Typography variant="caption" color="error">
+                                    Invalid subject
+                                  </Typography>
+                                </TableCell>
                               );
+                            }
 
-                            const errorMsg =
-                              rowErrors[
-                                subject.subject
-                              ];
+                            /* COMPONENT SUBJECT */
 
-                            const isOverMax =
-                              Number(value) >
-                              Number(
-                                subject.maxMarks
+                            if (components.length > 0) {
+                              return (
+                                <TableCell
+                                  key={`cell-${studentId}-${subjectKey}`}
+                                >
+                                  <Stack direction="row" spacing={0.75}>
+                                    {components.map(
+                                      (component, componentIndex) => {
+                                        const componentName = getComponentName(
+                                          component,
+                                          componentIndex,
+                                        );
+
+                                        const componentKey =
+                                          getSafeComponentKey(
+                                            component,
+                                            componentIndex,
+                                            subjectIndex,
+                                          );
+
+                                        const value =
+                                          marksForm?.[studentId]?.[subjectId]?.[
+                                            componentName
+                                          ] ??
+                                          getExistingComponentValue(
+                                            studentId,
+                                            subjectId,
+                                            componentName,
+                                          );
+
+                                        return (
+                                          <TextField
+                                            key={`${studentId}-${subjectKey}-${componentKey}`}
+                                            size="small"
+                                            type="number"
+                                            label={componentName}
+                                            value={isAbsent ? "" : value}
+                                            disabled={isDisabled || isAbsent}
+                                            onChange={(event) =>
+                                              handleMarkChange(
+                                                studentId,
+                                                subjectId,
+                                                componentName,
+                                                event.target.value,
+                                              )
+                                            }
+                                            inputProps={{
+                                              min: 0,
+                                              max: component?.maxMarks,
+                                              style: {
+                                                textAlign: "center",
+                                                width: 44,
+                                              },
+                                            }}
+                                          />
+                                        );
+                                      },
+                                    )}
+                                  </Stack>
+                                </TableCell>
+                              );
+                            }
+
+                            /* SIMPLE SUBJECT */
+
+                            const simpleValue =
+                              marksForm?.[studentId]?.[subjectId]?.Marks ??
+                              getExistingSimpleSubjectValue(
+                                studentId,
+                                subjectId,
                               );
 
                             return (
                               <TableCell
-                                key={
-                                  subject.subject
-                                }
+                                key={`cell-${studentId}-${subjectKey}`}
                               >
                                 <TextField
                                   size="small"
-                                  type="text"
-                                  inputMode="numeric"
-                                  value={value}
+                                  type="number"
+                                  label="Marks"
+                                  value={isAbsent ? "" : simpleValue}
+                                  disabled={isDisabled || isAbsent}
                                   onChange={(event) =>
                                     handleMarkChange(
                                       studentId,
-                                      subject.subject,
-                                      event.target
-                                        .value
+                                      subjectId,
+                                      "Marks",
+                                      event.target.value,
                                     )
                                   }
-                                  error={!!errorMsg}
-                                  helperText={
-                                    errorMsg || ""
-                                  }
-                                  placeholder="—"
                                   inputProps={{
-                                    inputMode:
-                                      "numeric",
+                                    min: 0,
+                                    max: subject?.maxMarks,
                                     style: {
-                                      textAlign:
-                                        "center",
-                                      padding:
-                                        "5px 3px",
-                                      fontSize: 12,
+                                      textAlign: "center",
+                                      width: 60,
                                     },
-                                  }}
-                                  FormHelperTextProps={{
-                                    sx: {
-                                      fontSize: 8.5,
-                                      m: 0,
-                                      mt: 0.15,
-                                      lineHeight: 1,
-                                      whiteSpace:
-                                        "nowrap",
-                                    },
-                                  }}
-                                  sx={{
-                                    width: 64,
-
-                                    "& .MuiOutlinedInput-root":
-                                      {
-                                        borderRadius: 1.25,
-                                        backgroundColor:
-                                          isOverMax
-                                            ? COLORS.warningSoft
-                                            : "#fff",
-                                      },
-
-                                    "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline":
-                                      {
-                                        borderColor:
-                                          COLORS.accent,
-                                      },
                                   }}
                                 />
                               </TableCell>
                             );
-                          }
+                          },
                         )}
 
-                        {/* ACTION */}
-
                         <TableCell align="right">
-                          <Button
-                            size="small"
-                            variant={
-                              isSaved
-                                ? "outlined"
-                                : "contained"
-                            }
-                            startIcon={
-                              isSaved ? (
-                                <CheckCircle
+                          {isLocked ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={
+                                <EditRounded
                                   sx={{
-                                    fontSize: 14,
+                                    fontSize: 16,
                                   }}
                                 />
-                              ) : (
+                              }
+                              onClick={() => handleEdit(studentId)}
+                              disabled={savingAll}
+                              sx={btnEdit}
+                            >
+                              Edit
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={
                                 <Save
                                   sx={{
-                                    fontSize: 14,
+                                    fontSize: 16,
                                   }}
                                 />
-                              )
-                            }
-                            onClick={() =>
-                              handleSave(
-                                studentId
-                              )
-                            }
-                            disabled={
-                              isRowSaving ||
-                              savingAll ||
-                              hasError
-                            }
-                            sx={
-                              isSaved
-                                ? btnSaved
-                                : btnSave
-                            }
-                          >
-                            {isRowSaving
-                              ? "..."
-                              : isSaved
-                              ? "Saved"
-                              : "Save"}
-                          </Button>
+                              }
+                              onClick={() => handleSave(studentId)}
+                              disabled={isRowSaving || savingAll}
+                              sx={btnSave}
+                            >
+                              {isRowSaving ? "..." : "Save"}
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -1064,75 +1451,89 @@ function ResultsEntryContent() {
                 </TableBody>
               </Table>
             </TableContainer>
-          )}
+          ) : (
+            /* =================================================
+                   MOBILE
+              ================================================= */
 
-          {/* MOBILE */}
+            <Stack divider={<Divider />}>
+              {students.map((student, studentIndex) => {
+                const studentId = getStudentId(student);
 
-          {isMobile && (
-            <Stack
-              divider={<Divider />}
-              spacing={0}
-            >
-              {students.map((student) => {
-                const studentId =
-                  getStudentId(student);
+                if (!studentId) {
+                  return null;
+                }
 
-                const name =
-                  getStudentName(student);
+                const isSaved = savedIds[studentId];
 
-                const isSaved =
-                  savedIds[studentId];
+                const isRowSaving = savingIds[studentId];
 
-                const isRowSaving =
-                  savingIds[studentId];
+                const isAbsent = Boolean(absentMap[studentId]);
 
-                const rowErrors =
-                  getRowErrors(studentId);
+                const isLocked = Boolean(lockedIds[studentId]);
 
-                const hasError =
-                  Object.keys(rowErrors).length >
-                  0;
+                const isDisabled = isLocked || isRowSaving || savingAll;
+
+                const name = getStudentName(student);
 
                 return (
                   <Box
-                    key={`${studentId}-${examId}`}
+                    key={`mobile-student-${studentId}-${examId || studentIndex}`}
                     sx={{
-                      p: 1,
-                      backgroundColor: hasError
-                        ? COLORS.errorSoft
-                        : "#fff",
+                      p: 1.75,
+                      backgroundColor: isLocked
+                        ? COLORS.lockedBg
+                        : "transparent",
+                      transition: "background-color 0.15s ease",
                     }}
                   >
-                    {/* STUDENT HEADER */}
-
                     <Stack
                       direction="row"
-                      spacing={0.75}
+                      spacing={1.2}
                       alignItems="center"
-                      sx={{ mb: 0.75 }}
+                      sx={{
+                        mb: 1.25,
+                      }}
                     >
                       <Avatar
                         sx={{
-                          width: 28,
-                          height: 28,
-                          bgcolor: COLORS.primary,
-                          fontSize: 11,
+                          width: 34,
+                          height: 34,
+                          bgcolor: isLocked ? COLORS.textMuted : COLORS.primary,
+                          fontSize: 13,
                           fontWeight: 800,
                         }}
                       >
-                        {name
-                          .charAt(0)
-                          .toUpperCase()}
+                        {name.charAt(0).toUpperCase()}
                       </Avatar>
 
-                      <Typography
-                        fontSize={12.5}
-                        fontWeight={700}
-                        sx={{ flex: 1 }}
-                        noWrap
+                      <Box
+                        sx={{
+                          flex: 1,
+                        }}
                       >
-                        {name}
-                      </Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {name}
+                        </Typography>
+
+                        {isLocked && (
+                          <Stack
+                            direction="row"
+                            spacing={0.4}
+                            alignItems="center"
+                          >
+                            <LockRounded
+                              sx={{
+                                fontSize: 12,
+                                color: COLORS.textMuted,
+                              }}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              Locked
+                            </Typography>
+                          </Stack>
+                        )}
+                      </Box>
 
                       {isSaved && (
                         <Chip
@@ -1140,266 +1541,249 @@ function ResultsEntryContent() {
                           icon={
                             <CheckCircle
                               sx={{
-                                fontSize: 12,
+                                fontSize: 14,
                               }}
                             />
                           }
                           label="Saved"
                           sx={{
-                            ...successChipSx,
-                            height: 21,
-                            fontSize: 10,
+                            backgroundColor: "#DCFCE7",
+                            color: "#166534",
+                            fontWeight: 700,
                           }}
                         />
                       )}
                     </Stack>
 
-                    {/* MARK INPUTS */}
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={isAbsent}
+                          disabled={isDisabled}
+                          onChange={() => toggleAbsent(studentId)}
+                        />
+                      }
+                      label={
+                        <Typography variant="caption">
+                          Absent for this exam
+                        </Typography>
+                      }
+                      sx={{
+                        mb: 1,
+                      }}
+                    />
 
-                    <Stack
-                      direction="row"
-                      spacing={0.75}
-                      flexWrap="wrap"
-                      useFlexGap
-                      sx={{ mb: 0.75 }}
-                    >
-                      {selectedExam.subjects.map(
-                        (subject) => {
-                          const value =
-                            getMarkValue(
-                              studentId,
-                              subject.subject
-                            );
+                    {(selectedExam.subjects || []).map(
+                      (subject, subjectIndex) => {
+                        const subjectId = getSubjectId(subject);
 
-                          const errorMsg =
-                            rowErrors[
-                              subject.subject
-                            ];
+                        const subjectKey = getSafeSubjectKey(
+                          subject,
+                          subjectIndex,
+                        );
 
-                          const isOverMax =
-                            Number(value) >
-                            Number(
-                              subject.maxMarks
-                            );
+                        const subjectName = getSubjectName(
+                          subject,
+                          subjectIndex,
+                        );
 
+                        const components = Array.isArray(subject?.components)
+                          ? subject.components
+                          : [];
+
+                        if (!subjectId) {
                           return (
-                            <TextField
-                              key={
-                                subject.subject
-                              }
-                              size="small"
-                              type="text"
-                              inputMode="numeric"
-                              label={`${subject.subject} / ${subject.maxMarks}`}
-                              value={value}
-                              onChange={(event) =>
-                                handleMarkChange(
-                                  studentId,
-                                  subject.subject,
-                                  event.target.value
-                                )
-                              }
-                              error={!!errorMsg}
-                              helperText={
-                                errorMsg || ""
-                              }
-                              inputProps={{
-                                inputMode:
-                                  "numeric",
-                              }}
-                              FormHelperTextProps={{
-                                sx: {
-                                  fontSize: 8.5,
-                                  m: 0,
-                                  mt: 0.15,
-                                  lineHeight: 1,
-                                },
-                              }}
+                            <Box
+                              key={`mobile-invalid-${studentId}-${subjectKey}`}
                               sx={{
-                                width:
-                                  "calc(50% - 4px)",
-
-                                "& .MuiInputBase-input":
-                                  {
-                                    fontSize: 12,
-                                    py: 0.75,
-                                  },
-
-                                "& .MuiInputLabel-root":
-                                  {
-                                    fontSize: 11,
-                                  },
-
-                                "& .MuiOutlinedInput-root":
-                                  {
-                                    borderRadius: 1.25,
-                                    backgroundColor:
-                                      isOverMax
-                                        ? COLORS.warningSoft
-                                        : "#fff",
-                                  },
+                                mb: 1.25,
                               }}
-                            />
+                            >
+                              <Typography variant="caption" color="error">
+                                Invalid subject
+                              </Typography>
+                            </Box>
                           );
                         }
-                      )}
-                    </Stack>
 
-                    {/* MOBILE SAVE */}
+                        return (
+                          <Box
+                            key={`mobile-subject-${studentId}-${subjectKey}`}
+                            sx={{
+                              mb: 1.5,
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
+                              fontWeight={700}
+                              sx={{
+                                display: "block",
+                                mb: 0.6,
+                              }}
+                            >
+                              {subjectName} (max {subject?.maxMarks})
+                            </Typography>
 
-                    <Button
-                      fullWidth
-                      size="small"
-                      variant={
-                        isSaved
-                          ? "outlined"
-                          : "contained"
-                      }
-                      startIcon={
-                        isSaved ? (
-                          <CheckCircle
-                            sx={{ fontSize: 14 }}
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              flexWrap="wrap"
+                              useFlexGap
+                            >
+                              {components.length > 0 ? (
+                                components.map((component, componentIndex) => {
+                                  const componentName = getComponentName(
+                                    component,
+                                    componentIndex,
+                                  );
+
+                                  const componentKey = getSafeComponentKey(
+                                    component,
+                                    componentIndex,
+                                    subjectIndex,
+                                  );
+
+                                  const value =
+                                    marksForm?.[studentId]?.[subjectId]?.[
+                                      componentName
+                                    ] ??
+                                    getExistingComponentValue(
+                                      studentId,
+                                      subjectId,
+                                      componentName,
+                                    );
+
+                                  return (
+                                    <TextField
+                                      key={`mobile-${studentId}-${subjectKey}-${componentKey}`}
+                                      size="small"
+                                      type="number"
+                                      label={`${componentName} (${component?.maxMarks ?? 0})`}
+                                      disabled={isDisabled || isAbsent}
+                                      value={isAbsent ? "" : value}
+                                      onChange={(event) =>
+                                        handleMarkChange(
+                                          studentId,
+                                          subjectId,
+                                          componentName,
+                                          event.target.value,
+                                        )
+                                      }
+                                      inputProps={{
+                                        min: 0,
+                                        max: component?.maxMarks,
+                                      }}
+                                      sx={{
+                                        width: "calc(50% - 4px)",
+                                      }}
+                                    />
+                                  );
+                                })
+                              ) : (
+                                <TextField
+                                  key={`mobile-simple-${studentId}-${subjectKey}`}
+                                  size="small"
+                                  type="number"
+                                  label={`Marks (${subject?.maxMarks ?? 0})`}
+                                  disabled={isDisabled || isAbsent}
+                                  value={
+                                    isAbsent
+                                      ? ""
+                                      : (marksForm?.[studentId]?.[subjectId]
+                                          ?.Marks ??
+                                        getExistingSimpleSubjectValue(
+                                          studentId,
+                                          subjectId,
+                                        ))
+                                  }
+                                  onChange={(event) =>
+                                    handleMarkChange(
+                                      studentId,
+                                      subjectId,
+                                      "Marks",
+                                      event.target.value,
+                                    )
+                                  }
+                                  inputProps={{
+                                    min: 0,
+                                    max: subject?.maxMarks,
+                                  }}
+                                  sx={{
+                                    width: "calc(50% - 4px)",
+                                  }}
+                                />
+                              )}
+                            </Stack>
+                          </Box>
+                        );
+                      },
+                    )}
+
+                    {isLocked ? (
+                      <Button
+                        fullWidth
+                        size="small"
+                        variant="outlined"
+                        startIcon={
+                          <EditRounded
+                            sx={{
+                              fontSize: 16,
+                            }}
                           />
-                        ) : (
+                        }
+                        onClick={() => handleEdit(studentId)}
+                        disabled={savingAll}
+                        sx={btnEdit}
+                      >
+                        Edit
+                      </Button>
+                    ) : (
+                      <Button
+                        fullWidth
+                        size="small"
+                        variant="contained"
+                        startIcon={
                           <Save
-                            sx={{ fontSize: 14 }}
+                            sx={{
+                              fontSize: 16,
+                            }}
                           />
-                        )
-                      }
-                      onClick={() =>
-                        handleSave(studentId)
-                      }
-                      disabled={
-                        isRowSaving ||
-                        savingAll ||
-                        hasError
-                      }
-                      sx={isSaved ? btnSaved : btnSave}
-                    >
-                      {isRowSaving
-                        ? "Saving..."
-                        : isSaved
-                        ? "Saved"
-                        : "Save"}
-                    </Button>
+                        }
+                        onClick={() => handleSave(studentId)}
+                        disabled={isRowSaving || savingAll}
+                        sx={btnSave}
+                      >
+                        {isRowSaving ? "Saving..." : "Save"}
+                      </Button>
+                    )}
                   </Box>
                 );
               })}
             </Stack>
           )}
-        </Paper>
-      )}
 
-      {/* CLASS RESULT SUMMARY */}
-
-      {selectedExam && results.length > 0 && (
-        <Box sx={{ mt: 1.5 }}>
-          <Typography
-            sx={{
-              fontWeight: 800,
-              mb: 0.75,
-              color: COLORS.textDark,
-              fontSize: 13,
-            }}
-          >
-            Class Result Summary
-          </Typography>
-
-          <Paper
-            elevation={0}
-            sx={cardSx}
-          >
-            <TableContainer
-              sx={{ overflowX: "auto" }}
+          {resultsLoading && (
+            <Box
+              sx={{
+                p: 1.5,
+                borderTop: `1px solid ${COLORS.border}`,
+              }}
             >
-              <Table
-                size="small"
-                sx={{ minWidth: 380 }}
-              >
-                <TableHead>
-                  <TableRow
-                    sx={{
-                      backgroundColor:
-                        COLORS.surfaceTint,
-                    }}
-                  >
-                    <TableCell sx={headCellSx}>
-                      Student
-                    </TableCell>
-
-                    <TableCell sx={headCellSx}>
-                      Total
-                    </TableCell>
-
-                    <TableCell sx={headCellSx}>
-                      Percentage
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {results.map((result) => (
-                    <TableRow
-                      key={result._id}
-                      hover
-                      sx={{
-                        "& td": {
-                          py: 0.45,
-                        },
-                      }}
-                    >
-                      <TableCell
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: 12,
-                        }}
-                      >
-                        {result.student?.name}
-                      </TableCell>
-
-                      <TableCell
-                        sx={{ fontSize: 12 }}
-                      >
-                        {result.totalObtained}/
-                        {result.totalMax}
-                      </TableCell>
-
-                      <TableCell>
-                        <Chip
-                          label={`${result.percentage}%`}
-                          size="small"
-                          sx={{
-                            fontWeight: 700,
-                            height: 21,
-                            fontSize: 10,
-                            color:
-                              result.percentage >=
-                              40
-                                ? COLORS.success
-                                : COLORS.error,
-                            backgroundColor:
-                              result.percentage >=
-                              40
-                                ? COLORS.successSoft
-                                : COLORS.errorSoft,
-                          }}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Box>
+              <Typography variant="caption" color="text.secondary">
+                Loading existing results...
+              </Typography>
+            </Box>
+          )}
+        </Paper>
       )}
     </Box>
   );
 }
 
-// =====================================================
-// EMPTY STATE
-// =====================================================
+/* =========================================================
+   EMPTY STATE
+========================================================= */
 
 function EmptyState({ title, subtitle }) {
   return (
@@ -1408,36 +1792,33 @@ function EmptyState({ title, subtitle }) {
       sx={{
         ...cardSx,
         textAlign: "center",
-        py: { xs: 3, sm: 3.5 },
+        py: {
+          xs: 4.5,
+          sm: 6,
+        },
         px: 2,
       }}
     >
       <Avatar
         sx={{
           mx: "auto",
-          mb: 0.75,
-          width: 36,
-          height: 36,
+          mb: 1.5,
+          width: 48,
+          height: 48,
           bgcolor: COLORS.surfaceTint,
           color: COLORS.primary,
         }}
       >
-        <Assessment sx={{ fontSize: 18 }} />
+        <Assessment fontSize="small" />
       </Avatar>
 
-      <Typography
-        fontWeight={700}
-        fontSize={13}
-      >
-        {title}
-      </Typography>
+      <Typography fontWeight={700}>{title}</Typography>
 
       <Typography
+        variant="body2"
+        color="text.secondary"
         sx={{
-          mt: 0.35,
-          display: "block",
-          fontSize: 10.5,
-          color: COLORS.textMuted,
+          mt: 0.5,
         }}
       >
         {subtitle}
@@ -1446,9 +1827,9 @@ function EmptyState({ title, subtitle }) {
   );
 }
 
-// =====================================================
-// PAGE
-// =====================================================
+/* =========================================================
+   PAGE
+========================================================= */
 
 export default function TeacherResultsPage() {
   return (
@@ -1458,19 +1839,19 @@ export default function TeacherResultsPage() {
           minHeight: "100vh",
           backgroundColor: COLORS.bgPage,
           px: {
-            xs: 0.75,
-            sm: 1.25,
-            md: 1.75,
+            xs: 1,
+            sm: 2,
+            md: 3,
           },
           py: {
-            xs: 1,
-            md: 1.25,
+            xs: 1.5,
+            md: 2.5,
           },
         }}
       >
         <Box
           sx={{
-            maxWidth: 1100,
+            maxWidth: 1200,
             mx: "auto",
           }}
         >
@@ -1481,104 +1862,58 @@ export default function TeacherResultsPage() {
   );
 }
 
-// =====================================================
-// SHARED STYLES
-// =====================================================
+/* =========================================================
+   STYLES
+========================================================= */
 
 const cardSx = {
-  mb: 1.25,
+  mb: 2.5,
   border: `1px solid ${COLORS.border}`,
-  borderRadius: 1.75,
+  borderRadius: 3,
   overflow: "hidden",
   backgroundColor: "#fff",
+  boxShadow: "0 1px 2px rgba(16, 24, 40, 0.04)",
 };
 
 const headCellSx = {
   fontWeight: 800,
-  fontSize: 10.5,
+  fontSize: 12.5,
   color: COLORS.textDark,
   whiteSpace: "nowrap",
-  py: 0.65,
-};
-
-const selectSx = {
-  minWidth: {
-    sm: 190,
-  },
-
-  "& .MuiSelect-select": {
-    py: 0.7,
-    fontSize: 12,
-  },
-
-  "& .MuiOutlinedInput-root": {
-    borderRadius: 1.25,
-  },
+  backgroundColor: COLORS.surfaceTint,
 };
 
 const btnSave = {
   textTransform: "none",
   fontWeight: 700,
-  fontSize: 11.5,
-
-  background: `linear-gradient(
-    135deg,
-    ${COLORS.accent},
-    ${COLORS.primaryDark}
-  )`,
-
+  borderRadius: 2,
+  minWidth: 88,
+  background: `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.primaryDark})`,
   boxShadow: "none",
-
   "&:hover": {
-    background: `linear-gradient(
-      135deg,
-      ${COLORS.primary},
-      ${COLORS.primaryDeep}
-    )`,
+    background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.primaryDeep})`,
     boxShadow: "none",
   },
+};
 
-  "&.Mui-disabled": {
-    background: "#E5E1EF",
-    color: "#A7A0BD",
+const btnEdit = {
+  textTransform: "none",
+  fontWeight: 700,
+  borderRadius: 2,
+  minWidth: 88,
+  color: COLORS.primaryDark,
+  borderColor: COLORS.border,
+  backgroundColor: "#fff",
+  "&:hover": {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.surfaceTint,
   },
 };
 
 const btnSaveAll = {
-  ...btnSave,
-
-  background: `linear-gradient(
-    135deg,
-    ${COLORS.primaryDeep},
-    ${COLORS.primary}
-  )`,
-};
-
-const btnSaved = {
   textTransform: "none",
   fontWeight: 700,
-  fontSize: 11.5,
-  color: COLORS.success,
-  borderColor: "#86EFAC",
-
-  "&:hover": {
-    borderColor: COLORS.success,
-    backgroundColor: COLORS.successSoft,
-  },
-};
-
-const successChipSx = {
-  backgroundColor: COLORS.successSoft,
-  color: COLORS.success,
-  fontWeight: 700,
-  height: 24,
-  fontSize: 10.5,
-};
-
-const warningChipSx = {
-  backgroundColor: COLORS.warningSoft,
-  color: COLORS.warning,
-  fontWeight: 700,
-  height: 24,
-  fontSize: 10.5,
+  borderRadius: 2,
+  background: "linear-gradient(135deg, #16A34A, #15803D)",
+  boxShadow: "none",
 };

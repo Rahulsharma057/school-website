@@ -3,7 +3,7 @@ const User = require("../models/User");
 
 const authMiddleware = async (req, res, next) => {
   try {
-    console.log("========== AUTH DEBUG ==========");
+ /*    console.log("========== AUTH DEBUG ==========");
     console.log("Origin:", req.headers.origin);
     console.log("Cookie header:", req.headers.cookie);
     console.log("Parsed cookies:", req.cookies);
@@ -13,7 +13,7 @@ const authMiddleware = async (req, res, next) => {
       process.env.JWT_SECRET ? "FOUND" : "NOT FOUND"
     );
     console.log("NODE_ENV:", process.env.NODE_ENV);
-    console.log("================================");
+    console.log("================================"); */
 
     const token = req.cookies?.token;
 

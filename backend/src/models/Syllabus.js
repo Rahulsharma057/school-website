@@ -1,29 +1,123 @@
 const mongoose = require("mongoose");
 
+/* =========================================================
+   SUBTOPIC
+========================================================= */
+
+const subtopicSchema = new mongoose.Schema(
+  {
+    id: {
+      type: String,
+      required: true,
+    },
+
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    order: {
+      type: Number,
+      default: 0,
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+/* =========================================================
+   TOPIC
+========================================================= */
+
 const topicSchema = new mongoose.Schema(
   {
-    id: { type: String, required: true },
-    title: { type: String, required: true, trim: true },
-    description: { type: String, default: "" },
+    id: {
+      type: String,
+      required: true,
+    },
+
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    order: {
+      type: Number,
+      default: 0,
+    },
+
+    subtopics: {
+      type: [subtopicSchema],
+      default: [],
+    },
   },
-  { _id: false },
+  {
+    _id: false,
+  }
 );
+
+/* =========================================================
+   SUBJECT
+========================================================= */
 
 const subjectSchema = new mongoose.Schema(
   {
-    id: { type: String, required: true },
-    name: { type: String, required: true, trim: true },
-    order: { type: Number, default: 0 },
-    topics: [topicSchema],
+    id: {
+      type: String,
+      required: true,
+    },
+
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    order: {
+      type: Number,
+      default: 0,
+    },
+
+    topics: {
+      type: [topicSchema],
+      default: [],
+    },
   },
-  { _id: false },
+  {
+    _id: false,
+  }
 );
 
-const ROLE_VALUES = ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER"];
+/* =========================================================
+   ROLES
+========================================================= */
 
-// Where this syllabus should be surfaced across the site — purely a
-// frontend hint; whatever section renders (homepage widget, footer
-// links, etc.) queries by this key. Add new spots here as needed.
+const ROLE_VALUES = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "EDITOR",
+  "VIEWER",
+];
+
+/* =========================================================
+   PLACEMENTS
+========================================================= */
+
 const PLACEMENT_VALUES = [
   "homepage",
   "academics-page",
@@ -31,6 +125,10 @@ const PLACEMENT_VALUES = [
   "footer",
   "notice-board",
 ];
+
+/* =========================================================
+   SYLLABUS
+========================================================= */
 
 const syllabusSchema = new mongoose.Schema(
   {
@@ -47,13 +145,23 @@ const syllabusSchema = new mongoose.Schema(
       trim: true,
     },
 
+    /* =====================================================
+       IMPORTANT
+       Actual Class model:
+       mongoose.model("Class", ...)
+    ===================================================== */
+
     classId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "SchoolClass",
+      ref: "Class",
       required: true,
+      index: true,
     },
 
-    // snapshot — survives the class being renamed/deleted later
+    /* =====================================================
+       CLASS SNAPSHOT
+    ===================================================== */
+
     className: {
       type: String,
       required: true,
@@ -70,11 +178,22 @@ const syllabusSchema = new mongoose.Schema(
       type: String,
       default: "",
       maxlength: 500,
+      trim: true,
     },
 
-    subjects: [subjectSchema],
+    /* =====================================================
+       SUBJECTS
+    ===================================================== */
 
-    // Public route: /syllabus/:slug
+    subjects: {
+      type: [subjectSchema],
+      default: [],
+    },
+
+    /* =====================================================
+       SLUG
+    ===================================================== */
+
     slug: {
       type: String,
       required: true,
@@ -84,10 +203,18 @@ const syllabusSchema = new mongoose.Schema(
       index: true,
     },
 
+    /* =====================================================
+       STATUS
+    ===================================================== */
+
     status: {
       type: Boolean,
       default: true,
     },
+
+    /* =====================================================
+       PLACEMENTS
+    ===================================================== */
 
     placements: {
       type: [String],
@@ -95,26 +222,61 @@ const syllabusSchema = new mongoose.Schema(
       default: [],
     },
 
-    // Regenerated on every create/update
+    /* =====================================================
+       PDF
+    ===================================================== */
+
     pdf: {
-      url: { type: String, default: "" },
-      public_id: { type: String, default: "" },
-      generatedAt: { type: Date, default: null },
+      url: {
+        type: String,
+        default: "",
+      },
+
+      public_id: {
+        type: String,
+        default: "",
+      },
+
+      generatedAt: {
+        type: Date,
+        default: null,
+      },
     },
+
+    /* =====================================================
+       ACCESS CONTROL
+    ===================================================== */
 
     accessControl: {
       viewRoles: {
         type: [String],
         enum: ROLE_VALUES,
-        default: [], // empty = public
+        default: [],
       },
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+  }
 );
 
-syllabusSchema.index({ classId: 1, status: 1 });
-syllabusSchema.index({ title: "text", schoolName: "text", className: "text" });
+/* =========================================================
+   INDEXES
+========================================================= */
 
-module.exports = mongoose.model("Syllabus", syllabusSchema);
+syllabusSchema.index({
+  classId: 1,
+  status: 1,
+});
+
+syllabusSchema.index({
+  title: "text",
+  schoolName: "text",
+  className: "text",
+});
+
+module.exports =
+  mongoose.models.Syllabus ||
+  mongoose.model("Syllabus", syllabusSchema);
+
 module.exports.PLACEMENT_VALUES = PLACEMENT_VALUES;

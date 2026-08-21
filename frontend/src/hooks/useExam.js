@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -8,91 +9,396 @@ import {
 
 import {
   createExam,
-  getExamsByClass,
+  getAllExams,
+  getSchoolExams,
+  getCollegeExams,
+  getCollegeSemesterStructure,
+  getExamById,
   updateExam,
+  deleteExam,
 } from "@/services/examService";
 
 import { toast } from "react-toastify";
 
 // =====================================================
-// CREATE EXAM
+// QUERY KEYS
 // =====================================================
 
-export function useCreateExam() {
-  const queryClient = useQueryClient();
+export const examKeys = {
+  all: ["exams"],
 
-  return useMutation({
-    mutationFn: (data) => createExam(data),
+  lists: () => [
+    ...examKeys.all,
+    "list",
+  ],
 
-    onSuccess: () => {
-      toast.success("Exam created successfully");
+  allList: (params = {}) => [
+    ...examKeys.lists(),
+    "all",
+    params,
+  ],
 
-      queryClient.invalidateQueries({
-        queryKey: ["exams"],
-      });
-    },
+  school: (classId, params = {}) => [
+    ...examKeys.lists(),
+    "school",
+    classId,
+    params,
+  ],
 
-    onError: (error) => {
-      toast.error(
-        error.response?.data?.message ||
-          "Failed to create exam"
-      );
-    },
-  });
-}
+  college: (
+    programId,
+    semester,
+    params = {}
+  ) => [
+    ...examKeys.lists(),
+    "college",
+    programId,
+    semester,
+    params,
+  ],
+
+  semesterStructure: (programId) => [
+    ...examKeys.all,
+    "semester-structure",
+    programId,
+  ],
+
+  details: () => [
+    ...examKeys.all,
+    "detail",
+  ],
+
+  detail: (examId) => [
+    ...examKeys.details(),
+    examId,
+  ],
+};
 
 // =====================================================
-// GET EXAMS BY CLASS
+// ERROR HELPER
 // =====================================================
 
-export function useExamsByClass(classId) {
+const getErrorMessage = (
+  error,
+  fallback = "Something went wrong"
+) => {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    fallback
+  );
+};
+
+// =====================================================
+// GET ALL
+// =====================================================
+
+export const useAllExams = (
+  params = {},
+  options = {}
+) => {
   return useQuery({
-    queryKey: ["exams", classId],
+    queryKey: examKeys.allList(params),
 
-    queryFn: async () => {
-      const res = await getExamsByClass(classId);
-      return res.data.data;
-    },
+    queryFn: () => getAllExams(params),
 
-    enabled: !!classId,
+    enabled:
+      options.enabled !== false,
 
     staleTime: 1000 * 60 * 5,
+
+    ...options,
   });
-}
+};
 
 // =====================================================
-// UPDATE EXAM
+// SCHOOL EXAMS
 // =====================================================
 
-export function useUpdateExam() {
-  const queryClient = useQueryClient();
+export const useSchoolExams = (
+  classId,
+  params = {},
+  options = {}
+) => {
+  return useQuery({
+    queryKey: examKeys.school(
+      classId,
+      params
+    ),
+
+    queryFn: () =>
+      getSchoolExams(
+        classId,
+        params
+      ),
+
+    enabled:
+      Boolean(classId) &&
+      options.enabled !== false,
+
+    staleTime: 1000 * 60 * 5,
+
+    ...options,
+  });
+};
+
+// =====================================================
+// ALIAS
+// =====================================================
+
+export const useExamsByClass = (
+  classId,
+  params = {},
+  options = {}
+) => {
+  return useSchoolExams(
+    classId,
+    params,
+    options
+  );
+};
+
+// =====================================================
+// COLLEGE EXAMS
+// =====================================================
+
+export const useCollegeExams = (
+  programId,
+  semester,
+  params = {},
+  options = {}
+) => {
+  return useQuery({
+    queryKey: examKeys.college(
+      programId,
+      semester,
+      params
+    ),
+
+    queryFn: () =>
+      getCollegeExams(
+        programId,
+        semester,
+        params
+      ),
+
+    enabled:
+      Boolean(programId) &&
+      Boolean(semester) &&
+      options.enabled !== false,
+
+    staleTime: 1000 * 60 * 5,
+
+    ...options,
+  });
+};
+
+// =====================================================
+// SEMESTER STRUCTURE
+// =====================================================
+
+export const useCollegeSemesterStructure = (
+  programId,
+  options = {}
+) => {
+  return useQuery({
+    queryKey:
+      examKeys.semesterStructure(
+        programId
+      ),
+
+    queryFn: () =>
+      getCollegeSemesterStructure(
+        programId
+      ),
+
+    enabled:
+      Boolean(programId) &&
+      options.enabled !== false,
+
+    staleTime: 1000 * 60 * 10,
+
+    ...options,
+  });
+};
+
+// =====================================================
+// SINGLE EXAM
+// =====================================================
+
+export const useExam = (
+  examId,
+  options = {}
+) => {
+  return useQuery({
+    queryKey:
+      examKeys.detail(examId),
+
+    queryFn: () =>
+      getExamById(examId),
+
+    enabled:
+      Boolean(examId) &&
+      options.enabled !== false,
+
+    staleTime: 1000 * 60 * 5,
+
+    ...options,
+  });
+};
+
+// =====================================================
+// CREATE
+// =====================================================
+
+export const useCreateExam = () => {
+  const queryClient =
+    useQueryClient();
 
   return useMutation({
-    mutationFn: ({ examId, data }) =>
-      updateExam(examId, data),
+    mutationFn: createExam,
 
-    onSuccess: (_, variables) => {
-      toast.success("Exam updated successfully");
-
-      // Refresh all exam lists
+    onSuccess: (response) => {
       queryClient.invalidateQueries({
-        queryKey: ["exams"],
+        queryKey: examKeys.all,
       });
 
-      // If the updated exam has a class-specific query,
-      // refresh that query too.
-      if (variables?.data?.classId) {
-        queryClient.invalidateQueries({
-          queryKey: ["exams", variables.data.classId],
-        });
-      }
+      toast.success(
+        response?.message ||
+          "Exam created successfully"
+      );
     },
 
     onError: (error) => {
       toast.error(
-        error.response?.data?.message ||
-          "Failed to update exam"
+        getErrorMessage(
+          error,
+          "Failed to create exam"
+        )
       );
     },
   });
-}
+};
+
+// =====================================================
+// UPDATE
+// =====================================================
+
+export const useUpdateExam = () => {
+  const queryClient =
+    useQueryClient();
+
+  return useMutation({
+    mutationFn: updateExam,
+
+    onSuccess: (
+      response,
+      variables
+    ) => {
+      queryClient.invalidateQueries({
+        queryKey: examKeys.all,
+      });
+
+      const examId =
+        variables?.examId;
+
+      if (examId) {
+        queryClient.invalidateQueries({
+          queryKey:
+            examKeys.detail(
+              examId
+            ),
+        });
+      }
+
+      toast.success(
+        response?.message ||
+          "Exam updated successfully"
+      );
+    },
+
+    onError: (error) => {
+      toast.error(
+        getErrorMessage(
+          error,
+          "Failed to update exam"
+        )
+      );
+    },
+  });
+};
+
+// =====================================================
+// DELETE
+// =====================================================
+
+export const useDeleteExam = () => {
+  const queryClient =
+    useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteExam,
+
+    onSuccess: (
+      response,
+      examId
+    ) => {
+      queryClient.invalidateQueries({
+        queryKey: examKeys.all,
+      });
+
+      if (examId) {
+        queryClient.removeQueries({
+          queryKey:
+            examKeys.detail(
+              examId
+            ),
+        });
+      }
+
+      toast.success(
+        response?.message ||
+          "Exam deleted successfully"
+      );
+    },
+
+    onError: (error) => {
+      toast.error(
+        getErrorMessage(
+          error,
+          "Failed to delete exam"
+        )
+      );
+    },
+  });
+};
+
+// =====================================================
+// MANUAL INVALIDATION
+// =====================================================
+
+export const invalidateSchoolExams = async (
+  queryClient,
+  classId
+) => {
+  if (!queryClient) {
+    return;
+  }
+
+  if (classId) {
+    await queryClient.invalidateQueries({
+      queryKey:
+        examKeys.school(
+          classId
+        ),
+    });
+
+    return;
+  }
+
+  await queryClient.invalidateQueries({
+    queryKey: examKeys.all,
+  });
+};
+

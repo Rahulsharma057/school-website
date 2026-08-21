@@ -7,38 +7,57 @@ const teacherAssignmentSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
+    // SCHOOL
     class: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Class",
-      required: true,
+      default: null,
     },
-    subject: {
-      type: String,
-      trim: true,
-      default: "", // khali ho sakta hai agar sirf class-teacher hai, subject specific nahi
+
+    // NEW — COLLEGE
+    program: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Program",
+      default: null,
     },
-    isClassTeacher: {
-      type: Boolean,
-      default: false, // true = ye teacher is class ka in-charge hai
-    },
-    status: {
-      type: String,
-      enum: ["ACTIVE", "INACTIVE"],
-      default: "ACTIVE",
-    },
+    semester: { type: Number, default: null },
+
+    subject: { type: String, trim: true, default: "" },
+    isClassTeacher: { type: Boolean, default: false },
+    status: { type: String, enum: ["ACTIVE", "INACTIVE"], default: "ACTIVE" },
     assignedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-// same teacher, same class, same subject dobara active na ho (duplicate rokne ke liye)
+// NEW — class ya program mein se ek hi hona chahiye
+teacherAssignmentSchema.pre("validate", function () {
+  if (this.class && this.program) {
+    throw new Error(
+      "Assignment must belong to either a class or a program, not both",
+    );
+  }
+  if (!this.class && !this.program) {
+    throw new Error("Assignment must have either a class or a program");
+  }
+});
+
 teacherAssignmentSchema.index(
   { teacher: 1, class: 1, subject: 1 },
-  { unique: false } // unique nahi rakha kyunki INACTIVE records reuse ho sakte hai history ke liye
+  { unique: false },
 );
+teacherAssignmentSchema.index(
+  { teacher: 1, program: 1, semester: 1, subject: 1 },
+  { unique: false },
+);
+teacherAssignmentSchema.index({ class: 1, status: 1 });
+teacherAssignmentSchema.index({ program: 1, semester: 1, status: 1 });
 
-module.exports = mongoose.model("TeacherAssignment", teacherAssignmentSchema);
+module.exports =
+  mongoose.models.TeacherAssignment ||
+  mongoose.model("TeacherAssignment", teacherAssignmentSchema);

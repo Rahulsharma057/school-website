@@ -14,6 +14,10 @@ import {
   getTeacherById,
   updateTeacherByAdmin,
   uploadTeacherDocument,
+  deleteTeacherDocument,
+  getMyTeacherDocuments,
+  uploadMyTeacherDocument,
+  deleteMyTeacherDocument,
   uploadMyTeacherProfilePhoto,
 } from "@/services/teacherService";
 
@@ -30,9 +34,7 @@ export function useCreateTeacher() {
     mutationFn: createTeacher,
 
     onSuccess: () => {
-      toast.success(
-        "Teacher created successfully"
-      );
+      toast.success("Teacher created successfully");
 
       queryClient.invalidateQueries({
         queryKey: ["teachers"],
@@ -41,8 +43,7 @@ export function useCreateTeacher() {
 
     onError: (error) => {
       toast.error(
-        error.response?.data?.message ||
-          "Failed to create teacher"
+        error.response?.data?.message || "Failed to create teacher",
       );
     },
   });
@@ -57,14 +58,79 @@ export function useMyTeacherProfile() {
     queryKey: ["my-teacher-profile"],
 
     queryFn: async () => {
-      const res =
-        await getMyTeacherProfile();
+      const res = await getMyTeacherProfile();
 
       return res.data.data;
     },
 
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
+  });
+}
+
+// ======================================================
+// MY DOCUMENTS
+// FIX: new — these hooks (and the backend endpoints behind them) didn't
+// exist before. The self-profile page had no working way for a teacher
+// to upload/view/delete their own documents.
+// ======================================================
+
+export function useMyTeacherDocuments(options = {}) {
+  return useQuery({
+    queryKey: ["my-teacher-documents"],
+
+    queryFn: async () => {
+      const res = await getMyTeacherDocuments();
+
+      return res?.data?.data ?? {};
+    },
+
+    staleTime: 1000 * 60,
+    refetchOnWindowFocus: false,
+
+    ...options,
+  });
+}
+
+export function useUploadMyTeacherDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: uploadMyTeacherDocument,
+
+    onSuccess: () => {
+      toast.success("Document uploaded successfully");
+
+      queryClient.invalidateQueries({ queryKey: ["my-teacher-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["my-teacher-profile"] });
+    },
+
+    onError: (error) => {
+      toast.error(
+        error.response?.data?.message || "Failed to upload document",
+      );
+    },
+  });
+}
+
+export function useDeleteMyTeacherDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (documentId) => deleteMyTeacherDocument(documentId),
+
+    onSuccess: () => {
+      toast.success("Document removed successfully");
+
+      queryClient.invalidateQueries({ queryKey: ["my-teacher-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["my-teacher-profile"] });
+    },
+
+    onError: (error) => {
+      toast.error(
+        error.response?.data?.message || "Failed to remove document",
+      );
+    },
   });
 }
 
@@ -79,9 +145,7 @@ export function useUpdateMyTeacherProfile() {
     mutationFn: updateMyTeacherProfile,
 
     onSuccess: () => {
-      toast.success(
-        "Profile updated successfully"
-      );
+      toast.success("Profile updated successfully");
 
       queryClient.invalidateQueries({
         queryKey: ["my-teacher-profile"],
@@ -94,8 +158,7 @@ export function useUpdateMyTeacherProfile() {
 
     onError: (error) => {
       toast.error(
-        error.response?.data?.message ||
-          "Failed to update profile"
+        error.response?.data?.message || "Failed to update profile",
       );
     },
   });
@@ -110,8 +173,7 @@ export function useAllTeachers() {
     queryKey: ["teachers"],
 
     queryFn: async () => {
-      const res =
-        await getAllTeachers();
+      const res = await getAllTeachers();
 
       const data = res?.data?.data;
 
@@ -127,11 +189,7 @@ export function useAllTeachers() {
         return data.data;
       }
 
-      if (
-        Array.isArray(
-          res?.data?.teachers
-        )
-      ) {
+      if (Array.isArray(res?.data?.teachers)) {
         return res.data.teachers;
       }
 
@@ -147,28 +205,17 @@ export function useAllTeachers() {
 // GET TEACHER BY ID
 // ======================================================
 
-export function useTeacherById(
-  teacherId,
-  options = {}
-) {
+export function useTeacherById(teacherId, options = {}) {
   return useQuery({
-    queryKey: [
-      "teacher-profile",
-      teacherId,
-    ],
+    queryKey: ["teacher-profile", teacherId],
 
     queryFn: async () => {
-      const res =
-        await getTeacherById(
-          teacherId
-        );
+      const res = await getTeacherById(teacherId);
 
       return res.data.data;
     },
 
-    enabled:
-      Boolean(teacherId) &&
-      options.enabled !== false,
+    enabled: Boolean(teacherId) && options.enabled !== false,
 
     staleTime: 1000 * 60 * 2,
   });
@@ -182,79 +229,84 @@ export function useUpdateTeacherByAdmin() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      teacherId,
-      data,
-    }) =>
-      updateTeacherByAdmin(
-        teacherId,
-        data
-      ),
+    mutationFn: ({ teacherId, data }) => updateTeacherByAdmin(teacherId, data),
 
     onSuccess: (_, variables) => {
-      toast.success(
-        "Teacher updated successfully"
-      );
+      toast.success("Teacher updated successfully");
 
       queryClient.invalidateQueries({
         queryKey: ["teachers"],
       });
 
       queryClient.invalidateQueries({
-        queryKey: [
-          "teacher-profile",
-          variables.teacherId,
-        ],
+        queryKey: ["teacher-profile", variables.teacherId],
       });
     },
 
     onError: (error) => {
       toast.error(
-        error.response?.data?.message ||
-          "Failed to update teacher"
+        error.response?.data?.message || "Failed to update teacher",
       );
     },
   });
 }
 
 // ======================================================
-// DOCUMENT UPLOAD
+// DOCUMENT UPLOAD (admin)
 // ======================================================
 
 export function useUploadTeacherDocument() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      teacherId,
-      formData,
-    }) =>
-      uploadTeacherDocument(
-        teacherId,
-        formData
-      ),
+    mutationFn: ({ teacherId, formData }) =>
+      uploadTeacherDocument(teacherId, formData),
 
     onSuccess: (_, variables) => {
-      toast.success(
-        "Document uploaded successfully"
-      );
+      toast.success("Document uploaded successfully");
 
       queryClient.invalidateQueries({
         queryKey: ["teachers"],
       });
 
       queryClient.invalidateQueries({
-        queryKey: [
-          "teacher-profile",
-          variables.teacherId,
-        ],
+        queryKey: ["teacher-profile", variables.teacherId],
       });
     },
 
     onError: (error) => {
       toast.error(
-        error.response?.data?.message ||
-          "Failed to upload document"
+        error.response?.data?.message || "Failed to upload document",
+      );
+    },
+  });
+}
+
+// ======================================================
+// DOCUMENT DELETE (admin)
+// FIX: new — the backend delete-document endpoint had no hook wired up
+// to it at all.
+// ======================================================
+
+export function useDeleteTeacherDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ teacherId, documentType, documentId }) =>
+      deleteTeacherDocument(teacherId, documentType, documentId),
+
+    onSuccess: (_, variables) => {
+      toast.success("Document removed successfully");
+
+      queryClient.invalidateQueries({ queryKey: ["teachers"] });
+      queryClient.invalidateQueries({
+        queryKey: ["teacher-profile", variables.teacherId],
+      });
+    },
+
+    onError: (error) => {
+      toast.error(
+        error.response?.data?.message || "Failed to remove document",
       );
     },
   });
@@ -268,18 +320,13 @@ export function useUploadMyTeacherProfilePhoto() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn:
-      uploadMyTeacherProfilePhoto,
+    mutationFn: uploadMyTeacherProfilePhoto,
 
     onSuccess: () => {
-      toast.success(
-        "Profile photo uploaded successfully"
-      );
+      toast.success("Profile photo uploaded successfully");
 
       queryClient.invalidateQueries({
-        queryKey: [
-          "my-teacher-profile",
-        ],
+        queryKey: ["my-teacher-profile"],
       });
 
       queryClient.invalidateQueries({
@@ -289,8 +336,7 @@ export function useUploadMyTeacherProfilePhoto() {
 
     onError: (error) => {
       toast.error(
-        error.response?.data?.message ||
-          "Failed to upload profile photo"
+        error.response?.data?.message || "Failed to upload profile photo",
       );
     },
   });

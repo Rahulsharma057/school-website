@@ -27,7 +27,8 @@ import {
   deleteMyStudentDocument,
   markStudentLeft,
   reactivateStudent,
-  getLeftStudents,
+  getLeftStudents,  importStudents,
+  exportStudents,
 } from "@/services/studentService";
 
 // ======================================================
@@ -1094,6 +1095,91 @@ export function useDownloadMyStudentProfile() {
         getErrorMessage(
           error,
           "Failed to download profile"
+        )
+      );
+    },
+  });
+}
+
+// ======================================================
+// ADMIN - IMPORT STUDENTS
+// ======================================================
+
+export function useImportStudents() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (formData) => importStudents(formData),
+
+    onSuccess: (res) => {
+      const message =
+        res?.data?.message ||
+        "Students imported successfully";
+
+      toast.success(message);
+
+      // Refresh student lists
+      queryClient.invalidateQueries({
+        queryKey: studentKeys.lists(),
+      });
+
+      // Refresh class-wise lists
+      invalidateByClassLists(queryClient);
+    },
+
+    onError: (error) => {
+      toast.error(
+        getErrorMessage(
+          error,
+          "Failed to import students"
+        )
+      );
+    },
+  });
+}
+
+// ======================================================
+// ADMIN - EXPORT STUDENTS
+// ======================================================
+
+export function useExportStudents() {
+  return useMutation({
+    mutationFn: async (params = {}) => {
+      const res = await exportStudents(params);
+
+      const blob = res.data;
+
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = "students.xlsx";
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+
+      return res;
+    },
+
+    onSuccess: () => {
+      toast.success(
+        "Students Excel downloaded successfully"
+      );
+    },
+
+    onError: (error) => {
+      toast.error(
+        getErrorMessage(
+          error,
+          "Failed to export students"
         )
       );
     },

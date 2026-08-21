@@ -1,54 +1,50 @@
 const express = require("express");
 const router = express.Router();
 
-const authMiddleware = require("../middlewares/authMiddleware");
-const allowRoles = require("../middlewares/roleMiddleware");
-
 const {
   assignTeacher,
   getMyAssignments,
   getAllAssignments,
-  removeAssignment,
+  removeAssignment,  updateAssignment,
 } = require("../controllers/teacherAssignmentController");
 
-// ==========================
-// ASSIGN teacher to class — Principal/Admin/SuperAdmin
-// ==========================
+const authMiddleware = require("../middlewares/authMiddleware");
+const allowRoles = require("../middlewares/roleMiddleware");
+
 router.post(
   "/",
   authMiddleware,
   allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
-  assignTeacher
+  assignTeacher,
 );
 
-// ==========================
-// TEACHER — apni assigned classes dekhe
-// ==========================
 router.get(
   "/my-assignments",
   authMiddleware,
   allowRoles("TEACHER"),
-  getMyAssignments
+  getMyAssignments,
 );
 
-// ==========================
-// ADMIN VIEW — saari assignments (filter ke saath)
-// ==========================
 router.get(
   "/",
   authMiddleware,
   allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
-  getAllAssignments
+  getAllAssignments,
 );
 
-// ==========================
-// REMOVE / DEACTIVATE assignment
-// ==========================
-router.patch(
+router.put(
   "/:id/remove",
   authMiddleware,
   allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
-  removeAssignment
+  removeAssignment,
+);
+
+
+router.put(
+  "/:id",
+  authMiddleware,
+  allowRoles("SUPER_ADMIN", "ADMIN", "PRINCIPAL"),
+  updateAssignment,
 );
 
 module.exports = router;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Box,
@@ -81,7 +81,8 @@ import {
   useUploadStudentAadhar,
   useUploadStudentDocument,
   useDeleteStudentDocument,
-  useDownloadStudentProfile,
+  useDownloadStudentProfile,  useImportStudents,
+  useExportStudents,
 } from "@/hooks/useStudent";
 
 import { downloadFile, isImageUrl } from "@/utils/downloadFile";
@@ -150,18 +151,13 @@ const getInitials = (name = "") =>
 const avatarColor = (name = "") => {
   const code = name?.trim()?.charCodeAt(0);
 
-  const index = Number.isFinite(code)
-    ? code % AVATAR_COLORS.length
-    : 0;
+  const index = Number.isFinite(code) ? code % AVATAR_COLORS.length : 0;
 
   return AVATAR_COLORS[index];
 };
 
 function safeFileName(name, suffix) {
-  return `${(name || "student").replace(
-    /[^a-z0-9]/gi,
-    "_",
-  )}_${suffix}`;
+  return `${(name || "student").replace(/[^a-z0-9]/gi, "_")}_${suffix}`;
 }
 
 // ======================================================
@@ -195,12 +191,10 @@ const primaryButtonSx = {
 // PREVIEW ITEM
 // ======================================================
 
-function PreviewItem({
-  url,
-  title,
-  downloadName,
-}) {
+function PreviewItem({ url, title, downloadName }) {
   const [downloading, setDownloading] = useState(false);
+
+  
 
   const isImage = isImageUrl(url);
 
@@ -230,13 +224,7 @@ function PreviewItem({
       }}
     >
       <Box
-        onClick={() =>
-          window.open(
-            url,
-            "_blank",
-            "noopener,noreferrer",
-          )
-        }
+        onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
         sx={{
           height: {
             xs: 105,
@@ -251,9 +239,7 @@ function PreviewItem({
 
           bgcolor: "#f1f5ff",
 
-          backgroundImage: isImage
-            ? `url(${url})`
-            : "none",
+          backgroundImage: isImage ? `url(${url})` : "none",
 
           backgroundSize: "cover",
           backgroundPosition: "center",
@@ -294,21 +280,12 @@ function PreviewItem({
           {title}
         </Typography>
 
-        <Stack
-          direction="row"
-          spacing={0.75}
-        >
+        <Stack direction="row" spacing={0.75}>
           <Button
             size="small"
             fullWidth
             variant="outlined"
-            onClick={() =>
-              window.open(
-                url,
-                "_blank",
-                "noopener,noreferrer",
-              )
-            }
+            onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
             sx={{
               textTransform: "none",
               fontSize: 11.5,
@@ -326,14 +303,9 @@ function PreviewItem({
             disabled={downloading}
             startIcon={
               downloading ? (
-                <CircularProgress
-                  size={12}
-                  color="inherit"
-                />
+                <CircularProgress size={12} color="inherit" />
               ) : (
-                <DownloadOutlinedIcon
-                  sx={{ fontSize: 14 }}
-                />
+                <DownloadOutlinedIcon sx={{ fontSize: 14 }} />
               )
             }
             sx={{
@@ -394,8 +366,7 @@ function validateCreateForm(form) {
     const dob = new Date(form.dateOfBirth);
 
     if (dob > new Date()) {
-      errors.dateOfBirth =
-        "Date of birth cannot be in the future";
+      errors.dateOfBirth = "Date of birth cannot be in the future";
     }
   }
 
@@ -407,43 +378,27 @@ function validateCreateForm(form) {
 
   if (parentTouched) {
     if (!form.parentName.trim()) {
-      errors.parentName =
-        "Required to create a parent login";
+      errors.parentName = "Required to create a parent login";
     }
 
     if (!form.parentEmail.trim()) {
-      errors.parentEmail =
-        "Required to create a parent login";
-    } else if (
-      !EMAIL_REGEX.test(form.parentEmail.trim())
-    ) {
-      errors.parentEmail =
-        "Enter a valid email";
+      errors.parentEmail = "Required to create a parent login";
+    } else if (!EMAIL_REGEX.test(form.parentEmail.trim())) {
+      errors.parentEmail = "Enter a valid email";
     }
   }
 
-  if (
-    form.parentPhone &&
-    !PHONE_REGEX.test(form.parentPhone.trim())
-  ) {
-    errors.parentPhone =
-      "Enter a valid 10-digit mobile number";
+  if (form.parentPhone && !PHONE_REGEX.test(form.parentPhone.trim())) {
+    errors.parentPhone = "Enter a valid 10-digit mobile number";
   }
 
   return errors;
 }
 
-function CreateStudentDialog({
-  open,
-  onClose,
-  classes,
-}) {
-  const { mutate: createStudent, isPending } =
-    useCreateStudent();
+function CreateStudentDialog({ open, onClose, classes }) {
+  const { mutate: createStudent, isPending } = useCreateStudent();
 
-  const [form, setForm] = useState(
-    EMPTY_CREATE_FORM,
-  );
+  const [form, setForm] = useState(EMPTY_CREATE_FORM);
 
   const [errors, setErrors] = useState({});
 
@@ -470,8 +425,7 @@ function CreateStudentDialog({
   };
 
   const handleSubmit = () => {
-    const validationErrors =
-      validateCreateForm(form);
+    const validationErrors = validateCreateForm(form);
 
     if (Object.keys(validationErrors).length) {
       setErrors(validationErrors);
@@ -489,20 +443,15 @@ function CreateStudentDialog({
           city: form.city.trim(),
         },
 
-        dateOfBirth:
-          form.dateOfBirth || undefined,
+        dateOfBirth: form.dateOfBirth || undefined,
 
-        parentName:
-          form.parentName.trim() || undefined,
+        parentName: form.parentName.trim() || undefined,
 
-        parentEmail:
-          form.parentEmail.trim() || undefined,
+        parentEmail: form.parentEmail.trim() || undefined,
 
-        parentPhone:
-          form.parentPhone.trim() || undefined,
+        parentPhone: form.parentPhone.trim() || undefined,
 
-        parentPassword:
-          form.parentPassword || undefined,
+        parentPassword: form.parentPassword || undefined,
       },
       {
         onSuccess: handleClose,
@@ -516,10 +465,7 @@ function CreateStudentDialog({
       onClose={handleClose}
       fullWidth
       maxWidth="sm"
-      fullScreen={
-        typeof window !== "undefined" &&
-        window.innerWidth < 600
-      }
+      fullScreen={typeof window !== "undefined" && window.innerWidth < 600}
       PaperProps={{
         sx: {
           borderRadius: {
@@ -546,11 +492,7 @@ function CreateStudentDialog({
           borderBottom: "1px solid #eef0f4",
         }}
       >
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={1}
-        >
+        <Stack direction="row" alignItems="center" spacing={1}>
           <Box
             sx={{
               width: 40,
@@ -582,8 +524,7 @@ function CreateStudentDialog({
                 color: "#94a3b8",
               }}
             >
-              Add student and optional guardian
-              account
+              Add student and optional guardian account
             </Typography>
           </Box>
         </Stack>
@@ -631,10 +572,7 @@ function CreateStudentDialog({
           </Typography>
         </Box>
 
-        <Grid
-          container
-          spacing={1}
-        >
+        <Grid container spacing={1}>
           <Grid item xs={12}>
             <TextField
               fullWidth
@@ -648,10 +586,7 @@ function CreateStudentDialog({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <PersonAddIcon
-                      fontSize="small"
-                      color="action"
-                    />
+                    <PersonAddIcon fontSize="small" color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -672,10 +607,7 @@ function CreateStudentDialog({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <EmailIcon
-                      fontSize="small"
-                      color="action"
-                    />
+                    <EmailIcon fontSize="small" color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -691,18 +623,12 @@ function CreateStudentDialog({
               value={form.password}
               onChange={handleChange}
               error={!!errors.password}
-              helperText={
-                errors.password ||
-                "Minimum 6 characters"
-              }
+              helperText={errors.password || "Minimum 6 characters"}
               sx={inputSx}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LockIcon
-                      fontSize="small"
-                      color="action"
-                    />
+                    <LockIcon fontSize="small" color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -723,10 +649,7 @@ function CreateStudentDialog({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <ClassIcon
-                      fontSize="small"
-                      color="action"
-                    />
+                    <ClassIcon fontSize="small" color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -736,10 +659,7 @@ function CreateStudentDialog({
               </MenuItem>
 
               {classes.map((c) => (
-                <MenuItem
-                  key={c._id}
-                  value={c._id}
-                >
+                <MenuItem key={c._id} value={c._id}>
                   {c.className} - {c.section}
                 </MenuItem>
               ))}
@@ -763,10 +683,7 @@ function CreateStudentDialog({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <CakeIcon
-                      fontSize="small"
-                      color="action"
-                    />
+                    <CakeIcon fontSize="small" color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -784,10 +701,7 @@ function CreateStudentDialog({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LocationCityIcon
-                      fontSize="small"
-                      color="action"
-                    />
+                    <LocationCityIcon fontSize="small" color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -799,15 +713,8 @@ function CreateStudentDialog({
           </Grid>
 
           <Grid item xs={12}>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-            >
-              <FamilyRestroomIcon
-                fontSize="small"
-                color="action"
-              />
+            <Stack direction="row" spacing={1} alignItems="center">
+              <FamilyRestroomIcon fontSize="small" color="action" />
 
               <Box>
                 <Typography
@@ -871,18 +778,12 @@ function CreateStudentDialog({
               onChange={handleChange}
               placeholder="9876543210"
               error={!!errors.parentPhone}
-              helperText={
-                errors.parentPhone ||
-                "Used for SMS reminders"
-              }
+              helperText={errors.parentPhone || "Used for SMS reminders"}
               sx={inputSx}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <PhoneIcon
-                      fontSize="small"
-                      color="action"
-                    />
+                    <PhoneIcon fontSize="small" color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -932,19 +833,14 @@ function CreateStudentDialog({
           disabled={isPending}
           startIcon={
             isPending ? (
-              <CircularProgress
-                size={16}
-                color="inherit"
-              />
+              <CircularProgress size={16} color="inherit" />
             ) : (
               <PersonAddIcon />
             )
           }
           sx={primaryButtonSx}
         >
-          {isPending
-            ? "Creating..."
-            : "Create Student"}
+          {isPending ? "Creating..." : "Create Student"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -955,13 +851,8 @@ function CreateStudentDialog({
 // DELETE DIALOG
 // ======================================================
 
-function DeleteStudentDialog({
-  student,
-  open,
-  onClose,
-}) {
-  const { mutate: deleteStudent, isPending } =
-    useDeleteStudent();
+function DeleteStudentDialog({ student, open, onClose }) {
+  const { mutate: deleteStudent, isPending } = useDeleteStudent();
 
   const handleConfirm = () => {
     if (!student) return;
@@ -1007,7 +898,6 @@ function DeleteStudentDialog({
         >
           <WarningAmberOutlinedIcon />
         </Box>
-
         Delete Student
       </DialogTitle>
 
@@ -1019,15 +909,9 @@ function DeleteStudentDialog({
             lineHeight: 1.7,
           }}
         >
-          Are you sure you want to permanently
-          delete{" "}
-          <strong>
-            {student.user?.name}
-          </strong>
-          {student.rollNumber
-            ? ` (Roll No. ${student.rollNumber})`
-            : ""}
-          ?
+          Are you sure you want to permanently delete{" "}
+          <strong>{student.user?.name}</strong>
+          {student.rollNumber ? ` (Roll No. ${student.rollNumber})` : ""}?
         </Typography>
 
         <Box
@@ -1046,9 +930,8 @@ function DeleteStudentDialog({
               fontWeight: 600,
             }}
           >
-            This will remove the student's login,
-            profile and uploaded documents.
-            This action cannot be undone.
+            This will remove the student's login, profile and uploaded
+            documents. This action cannot be undone.
           </Typography>
         </Box>
       </DialogContent>
@@ -1071,10 +954,7 @@ function DeleteStudentDialog({
           disabled={isPending}
           startIcon={
             isPending ? (
-              <CircularProgress
-                size={16}
-                color="inherit"
-              />
+              <CircularProgress size={16} color="inherit" />
             ) : (
               <DeleteOutlineIcon />
             )
@@ -1085,9 +965,7 @@ function DeleteStudentDialog({
             borderRadius: 2,
           }}
         >
-          {isPending
-            ? "Deleting..."
-            : "Delete Permanently"}
+          {isPending ? "Deleting..." : "Delete Permanently"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -1144,52 +1022,33 @@ function toDateInput(value) {
 function validateEditForm(form) {
   const errors = {};
 
-  if (
-    form.phone &&
-    !PHONE_REGEX.test(form.phone.trim())
-  ) {
-    errors.phone =
-      "Enter a valid 10-digit mobile number";
+  if (form.phone && !PHONE_REGEX.test(form.phone.trim())) {
+    errors.phone = "Enter a valid 10-digit mobile number";
   }
 
-  if (
-    form.aadharNumber &&
-    !AADHAR_REGEX.test(
-      form.aadharNumber.trim(),
-    )
-  ) {
-    errors.aadharNumber =
-      "Aadhar must be exactly 12 digits";
+  if (form.aadharNumber && !AADHAR_REGEX.test(form.aadharNumber.trim())) {
+    errors.aadharNumber = "Aadhar must be exactly 12 digits";
   }
 
   if (
     form.address?.pincode &&
-    !PINCODE_REGEX.test(
-      form.address.pincode.trim(),
-    )
+    !PINCODE_REGEX.test(form.address.pincode.trim())
   ) {
-    errors.pincode =
-      "Enter a valid 6-digit pincode";
+    errors.pincode = "Enter a valid 6-digit pincode";
   }
 
   if (
     form.emergencyContact?.phone &&
-    !PHONE_REGEX.test(
-      form.emergencyContact.phone.trim(),
-    )
+    !PHONE_REGEX.test(form.emergencyContact.phone.trim())
   ) {
-    errors.emergencyPhone =
-      "Enter a valid 10-digit mobile number";
+    errors.emergencyPhone = "Enter a valid 10-digit mobile number";
   }
 
   if (form.dateOfBirth) {
-    const dob = new Date(
-      form.dateOfBirth,
-    );
+    const dob = new Date(form.dateOfBirth);
 
     if (dob > new Date()) {
-      errors.dateOfBirth =
-        "Date of birth cannot be in the future";
+      errors.dateOfBirth = "Date of birth cannot be in the future";
     }
   }
 
@@ -1200,125 +1059,75 @@ function validateEditForm(form) {
 // EDIT STUDENT DIALOG
 // ======================================================
 
-function StudentEditDialog({
-  student,
-  open,
-  onClose,
-}) {
+function StudentEditDialog({ student, open, onClose }) {
   const theme = useTheme();
 
-  const isMobile = useMediaQuery(
-    theme.breakpoints.down("sm"),
-  );
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const {
-    mutate: updateStudent,
-    isPending: updating,
-  } = useUpdateStudentByAdmin();
+  const { mutate: updateStudent, isPending: updating } =
+    useUpdateStudentByAdmin();
 
-  const {
-    mutate: uploadAadhar,
-    isPending: uploadingAadhar,
-  } = useUploadStudentAadhar();
+  const { mutate: uploadAadhar, isPending: uploadingAadhar } =
+    useUploadStudentAadhar();
 
-  const {
-    mutate: uploadDocument,
-    isPending: uploadingDocument,
-  } = useUploadStudentDocument();
+  const { mutate: uploadDocument, isPending: uploadingDocument } =
+    useUploadStudentDocument();
 
-  const {
-    mutate: deleteDocument,
-    isPending: deletingDocument,
-  } = useDeleteStudentDocument();
+  const { mutate: deleteDocument, isPending: deletingDocument } =
+    useDeleteStudentDocument();
 
-  const {
-    mutate: downloadProfile,
-    isPending: downloadingProfile,
-  } = useDownloadStudentProfile();
+  const { mutate: downloadProfile, isPending: downloadingProfile } =
+    useDownloadStudentProfile();
 
   const [tab, setTab] = useState(0);
 
-  const [form, setForm] = useState(
-    EMPTY_EDIT_FORM,
-  );
+  const [form, setForm] = useState(EMPTY_EDIT_FORM);
 
   const [errors, setErrors] = useState({});
 
-  const [aadharFront, setAadharFront] =
-    useState(null);
+  const [aadharFront, setAadharFront] = useState(null);
 
-  const [aadharBack, setAadharBack] =
-    useState(null);
+  const [aadharBack, setAadharBack] = useState(null);
 
-  const [docType, setDocType] =
-    useState("OTHER");
+  const [docType, setDocType] = useState("OTHER");
 
-  const [docLabel, setDocLabel] =
-    useState("");
+  const [docLabel, setDocLabel] = useState("");
 
-  const [docFiles, setDocFiles] =
-    useState([]);
+  const [docFiles, setDocFiles] = useState([]);
 
   useEffect(() => {
     if (!student) return;
 
     setForm({
       phone: student.phone || "",
-      dateOfBirth: toDateInput(
-        student.dateOfBirth,
-      ),
-      status:
-        student.status || "ACTIVE",
-      admissionNumber:
-        student.admissionNumber || "",
-      admissionDate: toDateInput(
-        student.admissionDate,
-      ),
-      previousSchool:
-        student.previousSchool || "",
+      dateOfBirth: toDateInput(student.dateOfBirth),
+      status: student.status || "ACTIVE",
+      admissionNumber: student.admissionNumber || "",
+      admissionDate: toDateInput(student.admissionDate),
+      previousSchool: student.previousSchool || "",
       house: student.house || "",
-      aadharNumber:
-        student.aadharNumber || "",
-      fatherName:
-        student.fatherName || "",
-      motherName:
-        student.motherName || "",
-      guardianOccupation:
-        student.guardianOccupation || "",
-      category:
-        student.category || "",
-      religion:
-        student.religion || "",
-      nationality:
-        student.nationality || "Indian",
-      transportMode:
-        student.transportMode || "",
-      busRoute:
-        student.busRoute || "",
-      medicalConditions:
-        student.medicalConditions || "",
+      aadharNumber: student.aadharNumber || "",
+      fatherName: student.fatherName || "",
+      motherName: student.motherName || "",
+      guardianOccupation: student.guardianOccupation || "",
+      category: student.category || "",
+      religion: student.religion || "",
+      nationality: student.nationality || "Indian",
+      transportMode: student.transportMode || "",
+      busRoute: student.busRoute || "",
+      medicalConditions: student.medicalConditions || "",
 
       address: {
-        street:
-          student.address?.street || "",
-        city:
-          student.address?.city || "",
-        state:
-          student.address?.state || "",
-        pincode:
-          student.address?.pincode || "",
+        street: student.address?.street || "",
+        city: student.address?.city || "",
+        state: student.address?.state || "",
+        pincode: student.address?.pincode || "",
       },
 
       emergencyContact: {
-        name:
-          student.emergencyContact?.name ||
-          "",
-        phone:
-          student.emergencyContact?.phone ||
-          "",
-        relation:
-          student.emergencyContact?.relation ||
-          "",
+        name: student.emergencyContact?.name || "",
+        phone: student.emergencyContact?.phone || "",
+        relation: student.emergencyContact?.relation || "",
       },
     });
 
@@ -1359,10 +1168,7 @@ function StudentEditDialog({
       },
     }));
 
-    if (
-      name === "pincode" &&
-      errors.pincode
-    ) {
+    if (name === "pincode" && errors.pincode) {
       setErrors((prev) => ({
         ...prev,
         pincode: undefined,
@@ -1382,10 +1188,7 @@ function StudentEditDialog({
       },
     }));
 
-    if (
-      name === "phone" &&
-      errors.emergencyPhone
-    ) {
+    if (name === "phone" && errors.emergencyPhone) {
       setErrors((prev) => ({
         ...prev,
         emergencyPhone: undefined,
@@ -1396,8 +1199,7 @@ function StudentEditDialog({
   const handleSave = () => {
     if (!student) return;
 
-    const validationErrors =
-      validateEditForm(form);
+    const validationErrors = validateEditForm(form);
 
     if (Object.keys(validationErrors).length) {
       setErrors(validationErrors);
@@ -1417,27 +1219,18 @@ function StudentEditDialog({
   };
 
   const handleAadharUpload = () => {
-    if (
-      (!aadharFront && !aadharBack) ||
-      !student
-    ) {
+    if ((!aadharFront && !aadharBack) || !student) {
       return;
     }
 
     const formData = new FormData();
 
     if (aadharFront) {
-      formData.append(
-        "aadharFront",
-        aadharFront,
-      );
+      formData.append("aadharFront", aadharFront);
     }
 
     if (aadharBack) {
-      formData.append(
-        "aadharBack",
-        aadharBack,
-      );
+      formData.append("aadharBack", aadharBack);
     }
 
     uploadAadhar(
@@ -1455,10 +1248,7 @@ function StudentEditDialog({
   };
 
   const handleDocumentUpload = () => {
-    if (
-      !docFiles.length ||
-      !student
-    ) {
+    if (!docFiles.length || !student) {
       return;
     }
 
@@ -1471,10 +1261,7 @@ function StudentEditDialog({
     formData.append("type", docType);
 
     if (docLabel) {
-      formData.append(
-        "label",
-        docLabel,
-      );
+      formData.append("label", docLabel);
     }
 
     uploadDocument(
@@ -1496,8 +1283,7 @@ function StudentEditDialog({
 
     downloadProfile({
       studentId: student._id,
-      studentName:
-        student.user?.name,
+      studentName: student.user?.name,
     });
   };
 
@@ -1520,12 +1306,8 @@ function StudentEditDialog({
         sx: {
           borderRadius: isMobile ? 0 : 3,
           overflow: "hidden",
-          height: isMobile
-            ? "100%"
-            : "auto",
-          maxHeight: isMobile
-            ? "100%"
-            : "92vh",
+          height: isMobile ? "100%" : "auto",
+          maxHeight: isMobile ? "100%" : "92vh",
         },
       }}
     >
@@ -1540,49 +1322,30 @@ function StudentEditDialog({
 
           py: 1.5,
 
-          borderBottom:
-            "1px solid #eef0f4",
+          borderBottom: "1px solid #eef0f4",
 
           display: "flex",
           alignItems: "center",
-          justifyContent:
-            "space-between",
+          justifyContent: "space-between",
         }}
       >
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={1}
-          minWidth={0}
-        >
+        <Stack direction="row" alignItems="center" spacing={1} minWidth={0}>
           <Badge
             overlap="circular"
             variant="dot"
-            color={
-              student.status ===
-              "ACTIVE"
-                ? "success"
-                : "default"
-            }
+            color={student.status === "ACTIVE" ? "success" : "default"}
           >
             <Avatar
-              src={
-                student.profilePhoto ||
-                undefined
-              }
+              src={student.profilePhoto || undefined}
               sx={{
                 width: 42,
                 height: 42,
                 fontSize: 14,
                 fontWeight: 800,
-                bgcolor: avatarColor(
-                  student.user?.name,
-                ),
+                bgcolor: avatarColor(student.user?.name),
               }}
             >
-              {getInitials(
-                student.user?.name,
-              )}
+              {getInitials(student.user?.name)}
             </Avatar>
           </Badge>
 
@@ -1595,8 +1358,7 @@ function StudentEditDialog({
                 color: "#172033",
               }}
             >
-              {student.user?.name ||
-                "Student"}
+              {student.user?.name || "Student"}
             </Typography>
 
             <Stack
@@ -1612,9 +1374,7 @@ function StudentEditDialog({
                   color: "#94a3b8",
                 }}
               >
-                {student.rollNumber
-                  ? `Roll ${student.rollNumber}`
-                  : "Student"}
+                {student.rollNumber ? `Roll ${student.rollNumber}` : "Student"}
               </Typography>
 
               {student.admissionNumber && (
@@ -1634,10 +1394,7 @@ function StudentEditDialog({
                       color: "#94a3b8",
                     }}
                   >
-                    Adm.{" "}
-                    {
-                      student.admissionNumber
-                    }
+                    Adm. {student.admissionNumber}
                   </Typography>
                 </>
               )}
@@ -1645,28 +1402,19 @@ function StudentEditDialog({
           </Box>
         </Stack>
 
-        <Stack
-          direction="row"
-          spacing={0.25}
-        >
+        <Stack direction="row" spacing={0.25}>
           <Tooltip title="Download profile">
             <span>
               <IconButton
                 size="small"
-                onClick={
-                  handleDownloadProfile
-                }
-                disabled={
-                  downloadingProfile
-                }
+                onClick={handleDownloadProfile}
+                disabled={downloadingProfile}
                 sx={{
                   bgcolor: "#f8fafc",
                 }}
               >
                 {downloadingProfile ? (
-                  <CircularProgress
-                    size={18}
-                  />
+                  <CircularProgress size={18} />
                 ) : (
                   <DownloadOutlinedIcon fontSize="small" />
                 )}
@@ -1674,10 +1422,7 @@ function StudentEditDialog({
             </span>
           </Tooltip>
 
-          <IconButton
-            size="small"
-            onClick={onClose}
-          >
+          <IconButton size="small" onClick={onClose}>
             <CloseIcon />
           </IconButton>
         </Stack>
@@ -1687,14 +1432,11 @@ function StudentEditDialog({
 
       <Tabs
         value={tab}
-        onChange={(_, value) =>
-          setTab(value)
-        }
+        onChange={(_, value) => setTab(value)}
         variant="fullWidth"
         sx={{
           minHeight: 48,
-          borderBottom:
-            "1px solid #eef0f4",
+          borderBottom: "1px solid #eef0f4",
 
           "& .MuiTab-root": {
             minHeight: 48,
@@ -1708,19 +1450,12 @@ function StudentEditDialog({
 
         <Tab
           label={
-            <Stack
-              direction="row"
-              spacing={0.75}
-              alignItems="center"
-            >
+            <Stack direction="row" spacing={0.75} alignItems="center">
               <span>Documents</span>
 
-              {student.documents?.length >
-                0 && (
+              {student.documents?.length > 0 && (
                 <Chip
-                  label={
-                    student.documents.length
-                  }
+                  label={student.documents.length}
                   size="small"
                   sx={{
                     height: 20,
@@ -1762,8 +1497,7 @@ function StudentEditDialog({
                 },
                 bgcolor: "#fff",
                 borderRadius: 2.5,
-                border:
-                  "1px solid #e8ebf0",
+                border: "1px solid #e8ebf0",
               }}
             >
               <Typography
@@ -1777,10 +1511,7 @@ function StudentEditDialog({
                 Personal & Admission
               </Typography>
 
-              <Grid
-                container
-                spacing={1.5}
-              >
+              <Grid container spacing={1.5}>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
@@ -1788,15 +1519,9 @@ function StudentEditDialog({
                     label="Phone"
                     name="phone"
                     value={form.phone}
-                    onChange={
-                      handleChange
-                    }
-                    error={
-                      !!errors.phone
-                    }
-                    helperText={
-                      errors.phone
-                    }
+                    onChange={handleChange}
+                    error={!!errors.phone}
+                    helperText={errors.phone}
                     sx={inputSx}
                   />
                 </Grid>
@@ -1811,18 +1536,10 @@ function StudentEditDialog({
                     InputLabelProps={{
                       shrink: true,
                     }}
-                    value={
-                      form.dateOfBirth
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    error={
-                      !!errors.dateOfBirth
-                    }
-                    helperText={
-                      errors.dateOfBirth
-                    }
+                    value={form.dateOfBirth}
+                    onChange={handleChange}
+                    error={!!errors.dateOfBirth}
+                    helperText={errors.dateOfBirth}
                     sx={inputSx}
                   />
                 </Grid>
@@ -1834,23 +1551,12 @@ function StudentEditDialog({
                     select
                     label="Status"
                     name="status"
-                    value={
-                      form.status
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.status}
+                    onChange={handleChange}
                     sx={inputSx}
                   >
-                    {[
-                      "ACTIVE",
-                      "LEFT",
-                      "GRADUATED",
-                    ].map((status) => (
-                      <MenuItem
-                        key={status}
-                        value={status}
-                      >
+                    {["ACTIVE", "LEFT", "GRADUATED"].map((status) => (
+                      <MenuItem key={status} value={status}>
                         {status}
                       </MenuItem>
                     ))}
@@ -1863,12 +1569,8 @@ function StudentEditDialog({
                     size="small"
                     label="House"
                     name="house"
-                    value={
-                      form.house
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.house}
+                    onChange={handleChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -1879,12 +1581,8 @@ function StudentEditDialog({
                     size="small"
                     label="Admission Number"
                     name="admissionNumber"
-                    value={
-                      form.admissionNumber
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.admissionNumber}
+                    onChange={handleChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -1899,12 +1597,8 @@ function StudentEditDialog({
                     InputLabelProps={{
                       shrink: true,
                     }}
-                    value={
-                      form.admissionDate
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.admissionDate}
+                    onChange={handleChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -1915,12 +1609,8 @@ function StudentEditDialog({
                     size="small"
                     label="Previous School"
                     name="previousSchool"
-                    value={
-                      form.previousSchool
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.previousSchool}
+                    onChange={handleChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -1937,8 +1627,7 @@ function StudentEditDialog({
                 },
                 bgcolor: "#fff",
                 borderRadius: 2.5,
-                border:
-                  "1px solid #e8ebf0",
+                border: "1px solid #e8ebf0",
               }}
             >
               <Typography
@@ -1952,22 +1641,15 @@ function StudentEditDialog({
                 Family & Identity
               </Typography>
 
-              <Grid
-                container
-                spacing={1.5}
-              >
+              <Grid container spacing={1.5}>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
                     size="small"
                     label="Father's Name"
                     name="fatherName"
-                    value={
-                      form.fatherName
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.fatherName}
+                    onChange={handleChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -1978,12 +1660,8 @@ function StudentEditDialog({
                     size="small"
                     label="Mother's Name"
                     name="motherName"
-                    value={
-                      form.motherName
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.motherName}
+                    onChange={handleChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -1994,12 +1672,8 @@ function StudentEditDialog({
                     size="small"
                     label="Guardian Occupation"
                     name="guardianOccupation"
-                    value={
-                      form.guardianOccupation
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.guardianOccupation}
+                    onChange={handleChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2010,32 +1684,22 @@ function StudentEditDialog({
                     size="small"
                     label="Aadhar Number"
                     name="aadharNumber"
-                    value={
-                      form.aadharNumber
-                    }
+                    value={form.aadharNumber}
                     onChange={(e) => {
-                      const value =
-                        e.target.value
-                          .replace(/\D/g, "")
-                          .slice(
-                            0,
-                            12,
-                          );
+                      const value = e.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, 12);
 
                       setForm((prev) => ({
                         ...prev,
-                        aadharNumber:
-                          value,
+                        aadharNumber: value,
                       }));
                     }}
                     inputProps={{
-                      inputMode:
-                        "numeric",
+                      inputMode: "numeric",
                       maxLength: 12,
                     }}
-                    error={
-                      !!errors.aadharNumber
-                    }
+                    error={!!errors.aadharNumber}
                     helperText={
                       errors.aadharNumber ||
                       `${form.aadharNumber.length}/12 digits`
@@ -2051,29 +1715,14 @@ function StudentEditDialog({
                     select
                     label="Category"
                     name="category"
-                    value={
-                      form.category
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.category}
+                    onChange={handleChange}
                     sx={inputSx}
                   >
-                    <MenuItem value="">
-                      —
-                    </MenuItem>
+                    <MenuItem value="">—</MenuItem>
 
-                    {[
-                      "GENERAL",
-                      "OBC",
-                      "SC",
-                      "ST",
-                      "EWS",
-                    ].map((c) => (
-                      <MenuItem
-                        key={c}
-                        value={c}
-                      >
+                    {["GENERAL", "OBC", "SC", "ST", "EWS"].map((c) => (
+                      <MenuItem key={c} value={c}>
                         {c}
                       </MenuItem>
                     ))}
@@ -2086,12 +1735,8 @@ function StudentEditDialog({
                     size="small"
                     label="Religion"
                     name="religion"
-                    value={
-                      form.religion
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.religion}
+                    onChange={handleChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2102,12 +1747,8 @@ function StudentEditDialog({
                     size="small"
                     label="Nationality"
                     name="nationality"
-                    value={
-                      form.nationality
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.nationality}
+                    onChange={handleChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2124,8 +1765,7 @@ function StudentEditDialog({
                 },
                 bgcolor: "#fff",
                 borderRadius: 2.5,
-                border:
-                  "1px solid #e8ebf0",
+                border: "1px solid #e8ebf0",
               }}
             >
               <Typography
@@ -2139,23 +1779,15 @@ function StudentEditDialog({
                 Address
               </Typography>
 
-              <Grid
-                container
-                spacing={1.5}
-              >
+              <Grid container spacing={1.5}>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
                     size="small"
                     label="Street"
                     name="street"
-                    value={
-                      form.address
-                        .street
-                    }
-                    onChange={
-                      handleAddressChange
-                    }
+                    value={form.address.street}
+                    onChange={handleAddressChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2166,13 +1798,8 @@ function StudentEditDialog({
                     size="small"
                     label="City"
                     name="city"
-                    value={
-                      form.address
-                        .city
-                    }
-                    onChange={
-                      handleAddressChange
-                    }
+                    value={form.address.city}
+                    onChange={handleAddressChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2183,13 +1810,8 @@ function StudentEditDialog({
                     size="small"
                     label="State"
                     name="state"
-                    value={
-                      form.address
-                        .state
-                    }
-                    onChange={
-                      handleAddressChange
-                    }
+                    value={form.address.state}
+                    onChange={handleAddressChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2200,19 +1822,10 @@ function StudentEditDialog({
                     size="small"
                     label="Pincode"
                     name="pincode"
-                    value={
-                      form.address
-                        .pincode
-                    }
-                    onChange={
-                      handleAddressChange
-                    }
-                    error={
-                      !!errors.pincode
-                    }
-                    helperText={
-                      errors.pincode
-                    }
+                    value={form.address.pincode}
+                    onChange={handleAddressChange}
+                    error={!!errors.pincode}
+                    helperText={errors.pincode}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2229,8 +1842,7 @@ function StudentEditDialog({
                 },
                 bgcolor: "#fff",
                 borderRadius: 2.5,
-                border:
-                  "1px solid #e8ebf0",
+                border: "1px solid #e8ebf0",
               }}
             >
               <Typography
@@ -2244,23 +1856,15 @@ function StudentEditDialog({
                 Emergency & Transport
               </Typography>
 
-              <Grid
-                container
-                spacing={1.5}
-              >
+              <Grid container spacing={1.5}>
                 <Grid item xs={12} sm={4}>
                   <TextField
                     fullWidth
                     size="small"
                     label="Emergency Contact"
                     name="name"
-                    value={
-                      form.emergencyContact
-                        .name
-                    }
-                    onChange={
-                      handleEmergencyChange
-                    }
+                    value={form.emergencyContact.name}
+                    onChange={handleEmergencyChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2271,19 +1875,10 @@ function StudentEditDialog({
                     size="small"
                     label="Emergency Phone"
                     name="phone"
-                    value={
-                      form.emergencyContact
-                        .phone
-                    }
-                    onChange={
-                      handleEmergencyChange
-                    }
-                    error={
-                      !!errors.emergencyPhone
-                    }
-                    helperText={
-                      errors.emergencyPhone
-                    }
+                    value={form.emergencyContact.phone}
+                    onChange={handleEmergencyChange}
+                    error={!!errors.emergencyPhone}
+                    helperText={errors.emergencyPhone}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2294,13 +1889,8 @@ function StudentEditDialog({
                     size="small"
                     label="Relation"
                     name="relation"
-                    value={
-                      form.emergencyContact
-                        .relation
-                    }
-                    onChange={
-                      handleEmergencyChange
-                    }
+                    value={form.emergencyContact.relation}
+                    onChange={handleEmergencyChange}
                     sx={inputSx}
                   />
                 </Grid>
@@ -2312,50 +1902,29 @@ function StudentEditDialog({
                     select
                     label="Transport Mode"
                     name="transportMode"
-                    value={
-                      form.transportMode
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.transportMode}
+                    onChange={handleChange}
                     sx={inputSx}
                   >
-                    <MenuItem value="">
-                      —
-                    </MenuItem>
+                    <MenuItem value="">—</MenuItem>
 
-                    <MenuItem value="SCHOOL_BUS">
-                      School Bus
-                    </MenuItem>
+                    <MenuItem value="SCHOOL_BUS">School Bus</MenuItem>
 
-                    <MenuItem value="SELF">
-                      Self
-                    </MenuItem>
+                    <MenuItem value="SELF">Self</MenuItem>
 
-                    <MenuItem value="WALKING">
-                      Walking
-                    </MenuItem>
+                    <MenuItem value="WALKING">Walking</MenuItem>
                   </TextField>
                 </Grid>
 
-                {form.transportMode ===
-                  "SCHOOL_BUS" && (
-                  <Grid
-                    item
-                    xs={12}
-                    sm={6}
-                  >
+                {form.transportMode === "SCHOOL_BUS" && (
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       fullWidth
                       size="small"
                       label="Bus Route"
                       name="busRoute"
-                      value={
-                        form.busRoute
-                      }
-                      onChange={
-                        handleChange
-                      }
+                      value={form.busRoute}
+                      onChange={handleChange}
                       sx={inputSx}
                     />
                   </Grid>
@@ -2367,12 +1936,8 @@ function StudentEditDialog({
                     size="small"
                     label="Medical Conditions / Notes"
                     name="medicalConditions"
-                    value={
-                      form.medicalConditions
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={form.medicalConditions}
+                    onChange={handleChange}
                     multiline
                     minRows={3}
                     inputProps={{
@@ -2403,8 +1968,7 @@ function StudentEditDialog({
                 },
                 bgcolor: "#fff",
                 borderRadius: 2.5,
-                border:
-                  "1px solid #e8ebf0",
+                border: "1px solid #e8ebf0",
               }}
             >
               <Stack
@@ -2421,10 +1985,8 @@ function StudentEditDialog({
                     bgcolor: "#eef2ff",
                     color: "#6d28d9",
                     display: "flex",
-                    alignItems:
-                      "center",
-                    justifyContent:
-                      "center",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
                   <BadgeOutlinedIcon />
@@ -2451,44 +2013,30 @@ function StudentEditDialog({
                 </Box>
               </Stack>
 
-              <Grid
-                container
-                spacing={1}
-              >
+              <Grid container spacing={1}>
                 <Grid item xs={12} sm={6}>
                   <Button
                     component="label"
                     fullWidth
                     variant="outlined"
-                    startIcon={
-                      <UploadFileOutlinedIcon />
-                    }
+                    startIcon={<UploadFileOutlinedIcon />}
                     sx={{
                       minHeight: 46,
                       borderRadius: 2,
-                      textTransform:
-                        "none",
+                      textTransform: "none",
                       overflow: "hidden",
-                      whiteSpace:
-                        "nowrap",
-                      textOverflow:
-                        "ellipsis",
+                      whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
                     }}
                   >
-                    {aadharFront
-                      ? aadharFront.name
-                      : "Choose Front"}
+                    {aadharFront ? aadharFront.name : "Choose Front"}
 
                     <input
                       type="file"
                       hidden
                       accept=".jpg,.jpeg,.png,.webp,.pdf"
                       onChange={(e) =>
-                        setAadharFront(
-                          e.target
-                            .files?.[0] ||
-                            null,
-                        )
+                        setAadharFront(e.target.files?.[0] || null)
                       }
                     />
                   </Button>
@@ -2499,63 +2047,42 @@ function StudentEditDialog({
                     component="label"
                     fullWidth
                     variant="outlined"
-                    startIcon={
-                      <UploadFileOutlinedIcon />
-                    }
+                    startIcon={<UploadFileOutlinedIcon />}
                     sx={{
                       minHeight: 46,
                       borderRadius: 2,
-                      textTransform:
-                        "none",
+                      textTransform: "none",
                       overflow: "hidden",
-                      whiteSpace:
-                        "nowrap",
-                      textOverflow:
-                        "ellipsis",
+                      whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
                     }}
                   >
-                    {aadharBack
-                      ? aadharBack.name
-                      : "Choose Back"}
+                    {aadharBack ? aadharBack.name : "Choose Back"}
 
                     <input
                       type="file"
                       hidden
                       accept=".jpg,.jpeg,.png,.webp,.pdf"
                       onChange={(e) =>
-                        setAadharBack(
-                          e.target
-                            .files?.[0] ||
-                            null,
-                        )
+                        setAadharBack(e.target.files?.[0] || null)
                       }
                     />
                   </Button>
                 </Grid>
 
-                {(aadharFront ||
-                  aadharBack) && (
-                  <Grid
-                    item
-                    xs={12}
-                  >
+                {(aadharFront || aadharBack) && (
+                  <Grid item xs={12}>
                     <Button
                       fullWidth
                       variant="contained"
-                      onClick={
-                        handleAadharUpload
-                      }
-                      disabled={
-                        uploadingAadhar
-                      }
+                      onClick={handleAadharUpload}
+                      disabled={uploadingAadhar}
                       sx={{
                         ...primaryButtonSx,
                         minHeight: 44,
                       }}
                     >
-                      {uploadingAadhar
-                        ? "Uploading..."
-                        : "Upload Aadhar"}
+                      {uploadingAadhar ? "Uploading..." : "Upload Aadhar"}
                     </Button>
                   </Grid>
                 )}
@@ -2572,8 +2099,7 @@ function StudentEditDialog({
                 },
                 bgcolor: "#fff",
                 borderRadius: 2.5,
-                border:
-                  "1px solid #e8ebf0",
+                border: "1px solid #e8ebf0",
               }}
             >
               <Stack
@@ -2590,10 +2116,8 @@ function StudentEditDialog({
                     bgcolor: "#f5f3ff",
                     color: "#7c3aed",
                     display: "flex",
-                    alignItems:
-                      "center",
-                    justifyContent:
-                      "center",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
                   <UploadFileOutlinedIcon />
@@ -2620,128 +2144,94 @@ function StudentEditDialog({
                 </Box>
               </Stack>
 
-              {student.documents?.length >
-                0 && (
-                <Stack
-                  spacing={1}
-                  sx={{ mb: 2 }}
-                >
-                  {student.documents.map(
-                    (doc) => (
+              {student.documents?.length > 0 && (
+                <Stack spacing={1} sx={{ mb: 2 }}>
+                  {student.documents.map((doc) => (
+                    <Stack
+                      key={doc._id}
+                      direction="row"
+                      alignItems="center"
+                      justifyContent="space-between"
+                      spacing={1}
+                      sx={{
+                        p: 1.25,
+                        borderRadius: 2,
+                        bgcolor: "#f8fafc",
+                        border: "1px solid #eef0f4",
+                      }}
+                    >
                       <Stack
-                        key={doc._id}
                         direction="row"
-                        alignItems="center"
-                        justifyContent="space-between"
                         spacing={1}
-                        sx={{
-                          p: 1.25,
-                          borderRadius: 2,
-                          bgcolor:
-                            "#f8fafc",
-                          border:
-                            "1px solid #eef0f4",
-                        }}
+                        alignItems="center"
+                        minWidth={0}
                       >
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          alignItems="center"
-                          minWidth={0}
-                        >
-                          <Box
-                            sx={{
-                              width: 34,
-                              height: 34,
-                              flexShrink: 0,
-                              borderRadius: 1.5,
-                              bgcolor:
-                                "#eef2ff",
-                              color:
-                                "#6d28d9",
-                              display:
-                                "flex",
-                              alignItems:
-                                "center",
-                              justifyContent:
-                                "center",
-                            }}
-                          >
-                            <PictureAsPdfOutlinedIcon
-                              sx={{
-                                fontSize:
-                                  18,
-                              }}
-                            />
-                          </Box>
-
-                          <Box minWidth={0}>
-                            <Typography
-                              noWrap
-                              sx={{
-                                fontSize: 12,
-                                fontWeight: 700,
-                              }}
-                            >
-                              {doc.type ===
-                              "OTHER"
-                                ? doc.label ||
-                                  "Other"
-                                : DOCUMENT_TYPE_LABELS[
-                                    doc
-                                      .type
-                                  ] ||
-                                  doc.type}
-                            </Typography>
-
-                            <Typography
-                              sx={{
-                                fontSize:
-                                  10.5,
-                                color:
-                                  "#94a3b8",
-                              }}
-                            >
-                              Uploaded
-                              document
-                            </Typography>
-                          </Box>
-                        </Stack>
-
-                        <IconButton
-                          size="small"
-                          onClick={() =>
-                            deleteDocument(
-                              {
-                                studentId:
-                                  student._id,
-                                documentId:
-                                  doc._id,
-                              },
-                            )
-                          }
-                          disabled={
-                            deletingDocument
-                          }
+                        <Box
                           sx={{
-                            color:
-                              "#dc2626",
-                            bgcolor:
-                              "#fef2f2",
+                            width: 34,
+                            height: 34,
+                            flexShrink: 0,
+                            borderRadius: 1.5,
+                            bgcolor: "#eef2ff",
+                            color: "#6d28d9",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
                         >
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
+                          <PictureAsPdfOutlinedIcon
+                            sx={{
+                              fontSize: 18,
+                            }}
+                          />
+                        </Box>
+
+                        <Box minWidth={0}>
+                          <Typography
+                            noWrap
+                            sx={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {doc.type === "OTHER"
+                              ? doc.label || "Other"
+                              : DOCUMENT_TYPE_LABELS[doc.type] || doc.type}
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              fontSize: 10.5,
+                              color: "#94a3b8",
+                            }}
+                          >
+                            Uploaded document
+                          </Typography>
+                        </Box>
                       </Stack>
-                    ),
-                  )}
+
+                      <IconButton
+                        size="small"
+                        onClick={() =>
+                          deleteDocument({
+                            studentId: student._id,
+                            documentId: doc._id,
+                          })
+                        }
+                        disabled={deletingDocument}
+                        sx={{
+                          color: "#dc2626",
+                          bgcolor: "#fef2f2",
+                        }}
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
+                  ))}
                 </Stack>
               )}
 
-              <Grid
-                container
-                spacing={1}
-              >
+              <Grid container spacing={1}>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
@@ -2749,27 +2239,14 @@ function StudentEditDialog({
                     select
                     label="Document Type"
                     value={docType}
-                    onChange={(e) =>
-                      setDocType(
-                        e.target.value,
-                      )
-                    }
+                    onChange={(e) => setDocType(e.target.value)}
                     sx={inputSx}
                   >
-                    {DOCUMENT_TYPES.map(
-                      (type) => (
-                        <MenuItem
-                          key={
-                            type.value
-                          }
-                          value={
-                            type.value
-                          }
-                        >
-                          {type.label}
-                        </MenuItem>
-                      ),
-                    )}
+                    {DOCUMENT_TYPES.map((type) => (
+                      <MenuItem key={type.value} value={type.value}>
+                        {type.label}
+                      </MenuItem>
+                    ))}
                   </TextField>
                 </Grid>
 
@@ -2779,14 +2256,8 @@ function StudentEditDialog({
                       fullWidth
                       size="small"
                       label="Document Label"
-                      value={
-                        docLabel
-                      }
-                      onChange={(e) =>
-                        setDocLabel(
-                          e.target.value,
-                        )
-                      }
+                      value={docLabel}
+                      onChange={(e) => setDocLabel(e.target.value)}
                       sx={inputSx}
                     />
                   </Grid>
@@ -2797,14 +2268,11 @@ function StudentEditDialog({
                     component="label"
                     fullWidth
                     variant="outlined"
-                    startIcon={
-                      <UploadFileOutlinedIcon />
-                    }
+                    startIcon={<UploadFileOutlinedIcon />}
                     sx={{
                       minHeight: 46,
                       borderRadius: 2,
-                      textTransform:
-                        "none",
+                      textTransform: "none",
                     }}
                   >
                     {docFiles.length
@@ -2817,38 +2285,25 @@ function StudentEditDialog({
                       multiple
                       accept=".jpg,.jpeg,.png,.webp,.pdf"
                       onChange={(e) =>
-                        setDocFiles(
-                          Array.from(
-                            e.target
-                              .files ||
-                              [],
-                          ),
-                        )
+                        setDocFiles(Array.from(e.target.files || []))
                       }
                     />
                   </Button>
                 </Grid>
 
-                {docFiles.length >
-                  0 && (
+                {docFiles.length > 0 && (
                   <Grid item xs={12}>
                     <Button
                       fullWidth
                       variant="contained"
-                      onClick={
-                        handleDocumentUpload
-                      }
-                      disabled={
-                        uploadingDocument
-                      }
+                      onClick={handleDocumentUpload}
+                      disabled={uploadingDocument}
                       sx={{
                         ...primaryButtonSx,
                         minHeight: 44,
                       }}
                     >
-                      {uploadingDocument
-                        ? "Uploading..."
-                        : "Upload Documents"}
+                      {uploadingDocument ? "Uploading..." : "Upload Documents"}
                     </Button>
                   </Grid>
                 )}
@@ -2884,10 +2339,8 @@ function StudentEditDialog({
                     bgcolor: "#eef2ff",
                     color: "#6d28d9",
                     display: "flex",
-                    alignItems:
-                      "center",
-                    justifyContent:
-                      "center",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
                   <UploadFileOutlinedIcon
@@ -2916,26 +2369,15 @@ function StudentEditDialog({
                     mx: "auto",
                   }}
                 >
-                  Upload Aadhar or other
-                  documents from the Documents
-                  tab.
+                  Upload Aadhar or other documents from the Documents tab.
                 </Typography>
               </Box>
             ) : (
-              <Grid
-                container
-                spacing={1.5}
-              >
+              <Grid container spacing={1.5}>
                 {student.profilePhoto && (
-                  <Grid
-                    item
-                    xs={6}
-                    sm={4}
-                  >
+                  <Grid item xs={6} sm={4}>
                     <PreviewItem
-                      url={
-                        student.profilePhoto
-                      }
+                      url={student.profilePhoto}
                       title="Profile Photo"
                       downloadName={safeFileName(
                         student.user?.name,
@@ -2946,15 +2388,9 @@ function StudentEditDialog({
                 )}
 
                 {student.aadharFrontUrl && (
-                  <Grid
-                    item
-                    xs={6}
-                    sm={4}
-                  >
+                  <Grid item xs={6} sm={4}>
                     <PreviewItem
-                      url={
-                        student.aadharFrontUrl
-                      }
+                      url={student.aadharFrontUrl}
                       title="Aadhar — Front"
                       downloadName={safeFileName(
                         student.user?.name,
@@ -2965,15 +2401,9 @@ function StudentEditDialog({
                 )}
 
                 {student.aadharBackUrl && (
-                  <Grid
-                    item
-                    xs={6}
-                    sm={4}
-                  >
+                  <Grid item xs={6} sm={4}>
                     <PreviewItem
-                      url={
-                        student.aadharBackUrl
-                      }
+                      url={student.aadharBackUrl}
                       title="Aadhar — Back"
                       downloadName={safeFileName(
                         student.user?.name,
@@ -2983,38 +2413,24 @@ function StudentEditDialog({
                   </Grid>
                 )}
 
-                {student.documents?.map(
-                  (doc) => (
-                    <Grid
-                      item
-                      xs={6}
-                      sm={4}
-                      key={doc._id}
-                    >
-                      <PreviewItem
-                        url={doc.url}
-                        title={
-                          doc.type ===
-                          "OTHER"
-                            ? doc.label ||
-                              "Other"
-                            : DOCUMENT_TYPE_LABELS[
-                                doc.type
-                              ] ||
-                              doc.type
-                        }
-                        downloadName={safeFileName(
-                          student.user?.name,
-                          doc.type ===
-                            "OTHER"
-                            ? doc.label ||
-                              "document"
-                            : doc.type.toLowerCase(),
-                        )}
-                      />
-                    </Grid>
-                  ),
-                )}
+                {student.documents?.map((doc) => (
+                  <Grid item xs={6} sm={4} key={doc._id}>
+                    <PreviewItem
+                      url={doc.url}
+                      title={
+                        doc.type === "OTHER"
+                          ? doc.label || "Other"
+                          : DOCUMENT_TYPE_LABELS[doc.type] || doc.type
+                      }
+                      downloadName={safeFileName(
+                        student.user?.name,
+                        doc.type === "OTHER"
+                          ? doc.label || "document"
+                          : doc.type.toLowerCase(),
+                      )}
+                    />
+                  </Grid>
+                ))}
               </Grid>
             )}
           </Box>
@@ -3030,8 +2446,7 @@ function StudentEditDialog({
 
           py: 1.5,
 
-          borderTop:
-            "1px solid #eef0f4",
+          borderTop: "1px solid #eef0f4",
 
           bgcolor: "#fff",
         }}
@@ -3053,9 +2468,7 @@ function StudentEditDialog({
             disabled={updating}
             sx={primaryButtonSx}
           >
-            {updating
-              ? "Saving..."
-              : "Save Changes"}
+            {updating ? "Saving..." : "Save Changes"}
           </Button>
         )}
       </DialogActions>
@@ -3067,65 +2480,40 @@ function StudentEditDialog({
 // MOBILE STUDENT CARD
 // ======================================================
 
-function StudentMobileCard({
-  student,
-  onView,
-  onEdit,
-  onDelete,
-}) {
-  const [expanded, setExpanded] =
-    useState(false);
+function StudentMobileCard({ student, onView, onEdit, onDelete }) {
+  const [expanded, setExpanded] = useState(false);
 
-  const aadharComplete =
-    !!student.aadharFrontUrl &&
-    !!student.aadharBackUrl;
+  const aadharComplete = !!student.aadharFrontUrl && !!student.aadharBackUrl;
 
   const aadharPartial =
-    (!!student.aadharFrontUrl ||
-      !!student.aadharBackUrl) &&
-    !aadharComplete;
+    (!!student.aadharFrontUrl || !!student.aadharBackUrl) && !aadharComplete;
 
   return (
     <Card
       elevation={0}
       sx={{
         borderRadius: 2.5,
-        border:
-          "1px solid #e8e1f2",
+        border: "1px solid #e8e1f2",
         overflow: "hidden",
         bgcolor: "#fff",
       }}
     >
       <CardContent sx={{ p: 1.75 }}>
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={1}
-        >
+        <Stack direction="row" alignItems="center" spacing={1}>
           <Avatar
-            src={
-              student.profilePhoto ||
-              undefined
-            }
+            src={student.profilePhoto || undefined}
             sx={{
               width: 44,
               height: 44,
               fontSize: 13,
               fontWeight: 800,
-              bgcolor: avatarColor(
-                student.user?.name,
-              ),
+              bgcolor: avatarColor(student.user?.name),
             }}
           >
-            {getInitials(
-              student.user?.name,
-            )}
+            {getInitials(student.user?.name)}
           </Avatar>
 
-          <Box
-            minWidth={0}
-            flex={1}
-          >
+          <Box minWidth={0} flex={1}>
             <Typography
               noWrap
               sx={{
@@ -3134,8 +2522,7 @@ function StudentMobileCard({
                 color: "#1e293b",
               }}
             >
-              {student.user?.name ||
-                "—"}
+              {student.user?.name || "—"}
             </Typography>
 
             <Typography
@@ -3146,18 +2533,13 @@ function StudentMobileCard({
                 mt: 0.25,
               }}
             >
-              {student.user?.email ||
-                "No email"}
+              {student.user?.email || "No email"}
             </Typography>
           </Box>
 
           <IconButton
             size="small"
-            onClick={() =>
-              setExpanded(
-                (value) => !value,
-              )
-            }
+            onClick={() => setExpanded((value) => !value)}
             sx={{
               bgcolor: "#f8fafc",
             }}
@@ -3179,10 +2561,7 @@ function StudentMobileCard({
         >
           <Chip
             size="small"
-            label={`Roll ${
-              student.rollNumber ??
-              "—"
-            }`}
+            label={`Roll ${student.rollNumber ?? "—"}`}
             sx={{
               height: 25,
               fontSize: 10.5,
@@ -3193,16 +2572,8 @@ function StudentMobileCard({
 
           <Chip
             size="small"
-            label={
-              student.status ||
-              "ACTIVE"
-            }
-            color={
-              student.status ===
-              "ACTIVE"
-                ? "success"
-                : "default"
-            }
+            label={student.status || "ACTIVE"}
+            color={student.status === "ACTIVE" ? "success" : "default"}
             sx={{
               height: 25,
               fontSize: 10.5,
@@ -3220,18 +2591,9 @@ function StudentMobileCard({
                   : "Aadhar Missing"
             }
             color={
-              aadharComplete
-                ? "success"
-                : aadharPartial
-                  ? "warning"
-                  : "warning"
+              aadharComplete ? "success" : aadharPartial ? "warning" : "warning"
             }
-            variant={
-              aadharComplete ||
-              aadharPartial
-                ? "filled"
-                : "outlined"
-            }
+            variant={aadharComplete || aadharPartial ? "filled" : "outlined"}
             sx={{
               height: 25,
               fontSize: 10.5,
@@ -3243,10 +2605,7 @@ function StudentMobileCard({
         <Collapse in={expanded}>
           <Divider sx={{ my: 1.5 }} />
 
-          <Grid
-            container
-            spacing={1}
-          >
+          <Grid container spacing={1}>
             <Grid item xs={6}>
               <Typography
                 sx={{
@@ -3265,8 +2624,7 @@ function StudentMobileCard({
                   mt: 0.25,
                 }}
               >
-                {student.admissionNumber ||
-                  "—"}
+                {student.admissionNumber || "—"}
               </Typography>
             </Grid>
 
@@ -3288,8 +2646,7 @@ function StudentMobileCard({
                   mt: 0.25,
                 }}
               >
-                {student.phone ||
-                  "—"}
+                {student.phone || "—"}
               </Typography>
             </Grid>
 
@@ -3311,8 +2668,7 @@ function StudentMobileCard({
                   mt: 0.25,
                 }}
               >
-                {student.bloodGroup ||
-                  "—"}
+                {student.bloodGroup || "—"}
               </Typography>
             </Grid>
 
@@ -3334,8 +2690,7 @@ function StudentMobileCard({
                   mt: 0.25,
                 }}
               >
-                {student.documents
-                  ?.length || 0}
+                {student.documents?.length || 0}
               </Typography>
             </Grid>
           </Grid>
@@ -3347,8 +2702,7 @@ function StudentMobileCard({
           px: 1.5,
           py: 1,
           bgcolor: "#fafbfc",
-          borderTop:
-            "1px solid #eef0f4",
+          borderTop: "1px solid #eef0f4",
           gap: 0.75,
         }}
       >
@@ -3356,9 +2710,7 @@ function StudentMobileCard({
           fullWidth
           size="small"
           variant="outlined"
-          startIcon={
-            <VisibilityOutlinedIcon />
-          }
+          startIcon={<VisibilityOutlinedIcon />}
           onClick={onView}
           sx={{
             textTransform: "none",
@@ -3373,9 +2725,7 @@ function StudentMobileCard({
           fullWidth
           size="small"
           variant="outlined"
-          startIcon={
-            <EditOutlinedIcon />
-          }
+          startIcon={<EditOutlinedIcon />}
           onClick={onEdit}
           sx={{
             textTransform: "none",
@@ -3406,13 +2756,7 @@ function StudentMobileCard({
 // DESKTOP TABLE
 // ======================================================
 
-function StudentDesktopTable({
-  students,
-  loading,
-  onView,
-  onEdit,
-  onDelete,
-}) {
+function StudentDesktopTable({ students, loading, onView, onEdit, onDelete }) {
   return (
     <Table
       sx={{
@@ -3421,17 +2765,17 @@ function StudentDesktopTable({
     >
       <TableHead>
         <TableRow
-            sx={{
-      backgroundColor: "#3b1578",
-      "& th": {
-        color: "#fff",
-        fontWeight: 400,
-        fontSize: 10,
-        py: 1,
-        borderBottom: "none",
-        whiteSpace: "nowrap",
-      },
-    }}
+          sx={{
+            backgroundColor: "#3b1578",
+            "& th": {
+              color: "#fff",
+              fontWeight: 400,
+              fontSize: 10,
+              py: 1,
+              borderBottom: "none",
+              whiteSpace: "nowrap",
+            },
+          }}
         >
           {[
             "Roll No",
@@ -3441,31 +2785,23 @@ function StudentDesktopTable({
             "Aadhar",
             "Status",
             "Action",
-          ].map(
-            (heading, index) => (
-              <TableCell
-                key={heading}
-                align={
-                  index === 6
-                    ? "right"
-                    : "left"
-                }
-                sx={{
-                  fontSize: 10.5,
-                  fontWeight: 800,
-                  color: "#6f6680",
-                  textTransform:
-                    "uppercase",
-                  letterSpacing: ".05em",
-                  borderBottom:
-                    "1px solid #eef0f4",
-                  py: 1.5,
-                }}
-              >
-                {heading}
-              </TableCell>
-            ),
-          )}
+          ].map((heading, index) => (
+            <TableCell
+              key={heading}
+              align={index === 6 ? "right" : "left"}
+              sx={{
+                fontSize: 10.5,
+                fontWeight: 800,
+                color: "#6f6680",
+                textTransform: "uppercase",
+                letterSpacing: ".05em",
+                borderBottom: "1px solid #eef0f4",
+                py: 1.5,
+              }}
+            >
+              {heading}
+            </TableCell>
+          ))}
         </TableRow>
       </TableHead>
 
@@ -3481,8 +2817,7 @@ function StudentDesktopTable({
                     height: 48,
                     bgcolor: "#f8fafc",
                     borderRadius: 1.5,
-                    animation:
-                      "pulse 1.5s infinite",
+                    animation: "pulse 1.5s infinite",
                     "@keyframes pulse": {
                       "0%": {
                         opacity: 0.5,
@@ -3503,12 +2838,10 @@ function StudentDesktopTable({
         {!loading &&
           students.map((student) => {
             const aadharComplete =
-              !!student.aadharFrontUrl &&
-              !!student.aadharBackUrl;
+              !!student.aadharFrontUrl && !!student.aadharBackUrl;
 
             const aadharPartial =
-              (!!student.aadharFrontUrl ||
-                !!student.aadharBackUrl) &&
+              (!!student.aadharFrontUrl || !!student.aadharBackUrl) &&
               !aadharComplete;
 
             return (
@@ -3517,27 +2850,20 @@ function StudentDesktopTable({
                 hover
                 sx={{
                   "& td": {
-                    borderBottom:
-                      "1px solid #f1f3f7",
+                    borderBottom: "1px solid #f1f3f7",
                     py: 1.4,
                   },
 
-                  transition:
-                    "background .15s",
+                  transition: "background .15s",
                 }}
               >
                 <TableCell>
                   <Chip
-                    label={
-                      student.rollNumber ??
-                      "—"
-                    }
+                    label={student.rollNumber ?? "—"}
                     size="small"
                     sx={{
-                      bgcolor:
-                        "#f1f5f9",
-                      color:
-                        "#334155",
+                      bgcolor: "#f1f5f9",
+                      color: "#334155",
                       fontWeight: 800,
                       fontSize: 11,
                       borderRadius: 1.5,
@@ -3546,58 +2872,37 @@ function StudentDesktopTable({
                 </TableCell>
 
                 <TableCell>
-                  <Stack
-                    direction="row"
-                    alignItems="center"
-                    spacing={1}
-                  >
+                  <Stack direction="row" alignItems="center" spacing={1}>
                     <Avatar
-                      src={
-                        student.profilePhoto ||
-                        undefined
-                      }
+                      src={student.profilePhoto || undefined}
                       sx={{
                         width: 38,
                         height: 38,
                         fontSize: 12,
                         fontWeight: 800,
-                        bgcolor:
-                          avatarColor(
-                            student
-                              .user
-                              ?.name,
-                          ),
+                        bgcolor: avatarColor(student.user?.name),
                       }}
                     >
-                      {getInitials(
-                        student.user
-                          ?.name,
-                      )}
+                      {getInitials(student.user?.name)}
                     </Avatar>
 
-                    <Box
-                      minWidth={0}
-                    >
+                    <Box minWidth={0}>
                       <Typography
                         noWrap
                         sx={{
                           fontSize: 13,
                           fontWeight: 800,
-                          color:
-                            "#1e293b",
+                          color: "#1e293b",
                         }}
                       >
-                        {student.user
-                          ?.name ||
-                          "—"}
+                        {student.user?.name || "—"}
                       </Typography>
 
                       <Typography
                         noWrap
                         sx={{
                           fontSize: 10.5,
-                          color:
-                            "#94a3b8",
+                          color: "#94a3b8",
                         }}
                       >
                         {student.admissionNumber
@@ -3614,21 +2919,17 @@ function StudentDesktopTable({
                     sx={{
                       maxWidth: 220,
                       fontSize: 12,
-                      color:
-                        "#475569",
+                      color: "#475569",
                     }}
                   >
-                    {student.user
-                      ?.email ||
-                      "—"}
+                    {student.user?.email || "—"}
                   </Typography>
 
                   {student.phone && (
                     <Typography
                       sx={{
                         fontSize: 10.5,
-                        color:
-                          "#94a3b8",
+                        color: "#94a3b8",
                         mt: 0.25,
                       }}
                     >
@@ -3640,9 +2941,7 @@ function StudentDesktopTable({
                 <TableCell>
                   {student.bloodGroup ? (
                     <Chip
-                      label={
-                        student.bloodGroup
-                      }
+                      label={student.bloodGroup}
                       size="small"
                       variant="outlined"
                       sx={{
@@ -3652,20 +2951,14 @@ function StudentDesktopTable({
                       }}
                     />
                   ) : (
-                    <Typography
-                      color="text.disabled"
-                    >
-                      —
-                    </Typography>
+                    <Typography color="text.disabled">—</Typography>
                   )}
                 </TableCell>
 
                 <TableCell>
                   {aadharComplete ? (
                     <Chip
-                      icon={
-                        <CheckCircleOutlinedIcon />
-                      }
+                      icon={<CheckCircleOutlinedIcon />}
                       label="Complete"
                       size="small"
                       color="success"
@@ -3700,17 +2993,9 @@ function StudentDesktopTable({
 
                 <TableCell>
                   <Chip
-                    label={
-                      student.status ||
-                      "ACTIVE"
-                    }
+                    label={student.status || "ACTIVE"}
                     size="small"
-                    color={
-                      student.status ===
-                      "ACTIVE"
-                        ? "success"
-                        : "default"
-                    }
+                    color={student.status === "ACTIVE" ? "success" : "default"}
                     sx={{
                       fontWeight: 700,
                       fontSize: 10.5,
@@ -3727,17 +3012,12 @@ function StudentDesktopTable({
                     <Tooltip title="View profile">
                       <IconButton
                         size="small"
-                        onClick={() =>
-                          onView(student)
-                        }
+                        onClick={() => onView(student)}
                         sx={{
-                          color:
-                            "#6f6680",
+                          color: "#6f6680",
                           "&:hover": {
-                            bgcolor:
-                              "#eef2ff",
-                            color:
-                              "#6d28d9",
+                            bgcolor: "#eef2ff",
+                            color: "#6d28d9",
                           },
                         }}
                       >
@@ -3748,17 +3028,12 @@ function StudentDesktopTable({
                     <Tooltip title="Edit student">
                       <IconButton
                         size="small"
-                        onClick={() =>
-                          onEdit(student)
-                        }
+                        onClick={() => onEdit(student)}
                         sx={{
-                          color:
-                            "#6f6680",
+                          color: "#6f6680",
                           "&:hover": {
-                            bgcolor:
-                              "#ecfdf5",
-                            color:
-                              "#059669",
+                            bgcolor: "#ecfdf5",
+                            color: "#059669",
                           },
                         }}
                       >
@@ -3769,19 +3044,12 @@ function StudentDesktopTable({
                     <Tooltip title="Delete student">
                       <IconButton
                         size="small"
-                        onClick={() =>
-                          onDelete(
-                            student,
-                          )
-                        }
+                        onClick={() => onDelete(student)}
                         sx={{
-                          color:
-                            "#94a3b8",
+                          color: "#94a3b8",
                           "&:hover": {
-                            bgcolor:
-                              "#fef2f2",
-                            color:
-                              "#dc2626",
+                            bgcolor: "#fef2f2",
+                            color: "#dc2626",
                           },
                         }}
                       >
@@ -3802,12 +3070,7 @@ function StudentDesktopTable({
 // EMPTY STATE
 // ======================================================
 
-function EmptyState({
-  type = "class",
-  search,
-  onClear,
-  onAdd,
-}) {
+function EmptyState({ type = "class", search, onClear, onAdd }) {
   const noClass = type === "class";
 
   return (
@@ -3828,26 +3091,17 @@ function EmptyState({
           mx: "auto",
           mb: 1.25,
           borderRadius: 3,
-          bgcolor: noClass
-            ? "#eef2ff"
-            : "#f8fafc",
-          color: noClass
-            ? "#6d28d9"
-            : "#94a3b8",
+          bgcolor: noClass ? "#eef2ff" : "#f8fafc",
+          color: noClass ? "#6d28d9" : "#94a3b8",
           display: "flex",
           alignItems: "center",
-          justifyContent:
-            "center",
+          justifyContent: "center",
         }}
       >
         {noClass ? (
-          <ClassIcon
-            sx={{ fontSize: 30 }}
-          />
+          <ClassIcon sx={{ fontSize: 30 }} />
         ) : (
-          <SearchIcon
-            sx={{ fontSize: 30 }}
-          />
+          <SearchIcon sx={{ fontSize: 30 }} />
         )}
       </Box>
 
@@ -3899,9 +3153,7 @@ function EmptyState({
         <Button
           size="small"
           variant="contained"
-          startIcon={
-            <PersonAddIcon />
-          }
+          startIcon={<PersonAddIcon />}
           onClick={onAdd}
           sx={{
             mt: 1.5,
@@ -3922,23 +3174,17 @@ function EmptyState({
 export default function StudentsPage() {
   const theme = useTheme();
 
-  const isMobile = useMediaQuery(
-    theme.breakpoints.down("sm"),
-  );
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const isTablet = useMediaQuery(
-    theme.breakpoints.down("md"),
-  );
+  const isTablet = useMediaQuery(theme.breakpoints.down("md"));
 
-  const { data: classes = [] } =
-    useClasses();
+  const { data: classes = [] } = useClasses();
 
-  const [viewClassId, setViewClassId] =
-    useState("");
+  const [viewClassId, setViewClassId] = useState("");
 
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
 
+  
   // Server-side pagination
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(20);
@@ -3973,40 +3219,28 @@ export default function StudentsPage() {
   const totalStudents = Number(pagination.total) || 0;
   const totalPages = Number(pagination.totalPages) || 0;
 
-  const [createOpen, setCreateOpen] =
-    useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
-  const [editStudent, setEditStudent] =
-    useState(null);
+  const [editStudent, setEditStudent] = useState(null);
 
-  const [viewStudent, setViewStudent] =
-    useState(null);
+  const [viewStudent, setViewStudent] = useState(null);
 
-  const [
-    deleteCandidate,
-    setDeleteCandidate,
-  ] = useState(null);
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const importStudentsMutation = useImportStudents();
+const exportStudentsMutation = useExportStudents();
+
+const excelInputRef = useRef(null);
 
   const stats = useMemo(() => {
-    const active =
-      students.filter(
-        (s) =>
-          s.status === "ACTIVE",
-      ).length;
+    const active = students.filter((s) => s.status === "ACTIVE").length;
 
-    const completeAadhar =
-      students.filter(
-        (s) =>
-          s.aadharFrontUrl &&
-          s.aadharBackUrl,
-      ).length;
+    const completeAadhar = students.filter(
+      (s) => s.aadharFrontUrl && s.aadharBackUrl,
+    ).length;
 
-    const missingAadhar =
-      students.filter(
-        (s) =>
-          !s.aadharFrontUrl &&
-          !s.aadharBackUrl,
-      ).length;
+    const missingAadhar = students.filter(
+      (s) => !s.aadharFrontUrl && !s.aadharBackUrl,
+    ).length;
 
     return {
       total: totalStudents,
@@ -4016,10 +3250,7 @@ export default function StudentsPage() {
     };
   }, [students, totalStudents]);
 
-  const selectedClass =
-    classes.find(
-      (c) => c._id === viewClassId,
-    );
+  const selectedClass = classes.find((c) => c._id === viewClassId);
 
   const clearFilters = () => {
     setSearch("");
@@ -4027,6 +3258,37 @@ export default function StudentsPage() {
     setPage(1);
   };
 
+  const handleExcelImport = (event) => {
+  const file = event.target.files?.[0];
+
+  if (!file) return;
+
+  const fileName = file.name.toLowerCase();
+
+  if (
+    !fileName.endsWith(".xlsx") &&
+    !fileName.endsWith(".xls")
+  ) {
+    toast.error("Please select a valid Excel file");
+    event.target.value = "";
+    return;
+  }
+
+  const formData = new FormData();
+
+  formData.append("file", file);
+
+  importStudentsMutation.mutate(formData);
+
+  event.target.value = "";
+};
+const handleExcelExport = () => {
+  exportStudentsMutation.mutate({
+    search,
+    classId: viewClassId,
+    status: "",
+  });
+};
   return (
     <Box
       sx={{
@@ -4061,11 +3323,9 @@ export default function StudentsPage() {
 
             mb: 1,
 
-            border:
-              "1px solid #e8e1f2",
+            border: "1px solid #e8e1f2",
 
-            background:
-              "linear-gradient(135deg,#ffffff 0%,#faf7ff 100%)",
+            background: "linear-gradient(135deg,#ffffff 0%,#faf7ff 100%)",
           }}
         >
           <Stack
@@ -4080,12 +3340,7 @@ export default function StudentsPage() {
             justifyContent="space-between"
             spacing={1}
           >
-            <Stack
-              direction="row"
-              alignItems="center"
-              spacing={1}
-              minWidth={0}
-            >
+            <Stack direction="row" alignItems="center" spacing={1} minWidth={0}>
               <Box
                 sx={{
                   width: {
@@ -4103,16 +3358,12 @@ export default function StudentsPage() {
                   borderRadius: 2.5,
 
                   display: "flex",
-                  alignItems:
-                    "center",
-                  justifyContent:
-                    "center",
+                  alignItems: "center",
+                  justifyContent: "center",
 
-                  background:
-                    "linear-gradient(135deg,#6d28d9,#8b5cf6)",
+                  background: "linear-gradient(135deg,#6d28d9,#8b5cf6)",
 
-                  boxShadow:
-                    "0 8px 20px rgba(49,80,253,.18)",
+                  boxShadow: "0 8px 20px rgba(49,80,253,.18)",
                 }}
               >
                 <SchoolIcon
@@ -4155,26 +3406,53 @@ export default function StudentsPage() {
                     },
                   }}
                 >
-                  Manage profiles, documents
-                  and student records.
+                  Manage profiles, documents and student records.
                 </Typography>
               </Box>
             </Stack>
+<input
+  ref={excelInputRef}
+  type="file"
+  accept=".xlsx,.xls"
+  hidden
+  onChange={handleExcelImport}
+/>
 
+<Button
+  variant="outlined"
+  startIcon={<UploadFileOutlinedIcon />}
+  onClick={() => excelInputRef.current?.click()}
+  disabled={importStudentsMutation.isPending}
+  sx={{
+    textTransform: "none",
+    fontWeight: 600,
+  }}
+>
+  {importStudentsMutation.isPending
+    ? "Importing..."
+    : "Import Excel"}
+</Button>
+
+<Button
+  variant="outlined"
+  startIcon={<DownloadOutlinedIcon />}
+  onClick={handleExcelExport}
+  disabled={exportStudentsMutation.isPending}
+  sx={{
+    textTransform: "none",
+    fontWeight: 600,
+  }}
+>
+  {exportStudentsMutation.isPending
+    ? "Exporting..."
+    : "Export Excel"}
+</Button>
             <Button
               variant="contained"
-              size={
-                isMobile
-                  ? "medium"
-                  : "large"
-              }
+              size={isMobile ? "medium" : "large"}
               fullWidth={isMobile}
-              startIcon={
-                <PersonAddIcon />
-              }
-              onClick={() =>
-                setCreateOpen(true)
-              }
+              startIcon={<PersonAddIcon />}
+              onClick={() => setCreateOpen(true)}
               sx={{
                 ...primaryButtonSx,
                 px: 2.25,
@@ -4204,8 +3482,7 @@ export default function StudentsPage() {
           {[
             {
               title: "Total",
-              desktopTitle:
-                "Total Students",
+              desktopTitle: "Total Students",
               value: stats.total,
               icon: <GroupsIcon />,
               color: "#6d28d9",
@@ -4214,49 +3491,32 @@ export default function StudentsPage() {
 
             {
               title: "Active",
-              desktopTitle:
-                "Active Students",
+              desktopTitle: "Active Students",
               value: stats.active,
-              icon: (
-                <PersonOutlineOutlinedIcon />
-              ),
+              icon: <PersonOutlineOutlinedIcon />,
               color: "#059669",
               bg: "#ecfdf5",
             },
 
             {
               title: "Aadhar",
-              desktopTitle:
-                "Aadhar Complete",
-              value:
-                stats.completeAadhar,
-              icon: (
-                <BadgeOutlinedIcon />
-              ),
+              desktopTitle: "Aadhar Complete",
+              value: stats.completeAadhar,
+              icon: <BadgeOutlinedIcon />,
               color: "#7c3aed",
               bg: "#f5f3ff",
             },
 
             {
               title: "Missing",
-              desktopTitle:
-                "Aadhar Missing",
-              value:
-                stats.missingAadhar,
-              icon: (
-                <WarningAmberOutlinedIcon />
-              ),
+              desktopTitle: "Aadhar Missing",
+              value: stats.missingAadhar,
+              icon: <WarningAmberOutlinedIcon />,
               color: "#d97706",
               bg: "#fffbeb",
             },
           ].map((item) => (
-            <Grid
-              item
-              xs={6}
-              sm={6}
-              md={3}
-              key={item.title}
-            >
+            <Grid item xs={6} sm={6} md={3} key={item.title}>
               <Paper
                 elevation={0}
                 sx={{
@@ -4270,8 +3530,7 @@ export default function StudentsPage() {
                     md: 2.5,
                   },
 
-                  border:
-                    "1px solid #e8e1f2",
+                  border: "1px solid #e8e1f2",
 
                   height: "100%",
                 }}
@@ -4305,18 +3564,14 @@ export default function StudentsPage() {
                       color: item.color,
 
                       display: "flex",
-                      alignItems:
-                        "center",
-                      justifyContent:
-                        "center",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
                     {item.icon}
                   </Box>
 
-                  <Box
-                    minWidth={0}
-                  >
+                  <Box minWidth={0}>
                     <Typography
                       noWrap
                       sx={{
@@ -4330,9 +3585,7 @@ export default function StudentsPage() {
                         fontWeight: 700,
                       }}
                     >
-                      {isMobile
-                        ? item.title
-                        : item.desktopTitle}
+                      {isMobile ? item.title : item.desktopTitle}
                     </Typography>
 
                     <Typography
@@ -4349,9 +3602,7 @@ export default function StudentsPage() {
                         lineHeight: 1.2,
                       }}
                     >
-                      {viewClassId
-                        ? item.value
-                        : "—"}
+                      {viewClassId ? item.value : "—"}
                     </Typography>
                   </Box>
                 </Stack>
@@ -4372,8 +3623,7 @@ export default function StudentsPage() {
               md: 3,
             },
 
-            border:
-              "1px solid #e8e1f2",
+            border: "1px solid #e8e1f2",
 
             overflow: "hidden",
           }}
@@ -4388,8 +3638,7 @@ export default function StudentsPage() {
                 md: 2.25,
               },
 
-              borderBottom:
-                "1px solid #eef0f4",
+              borderBottom: "1px solid #eef0f4",
 
               bgcolor: "#fff",
             }}
@@ -4405,25 +3654,17 @@ export default function StudentsPage() {
               {/* TITLE */}
 
               <Box>
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  spacing={1}
-                >
+                <Stack direction="row" alignItems="center" spacing={1}>
                   <Box
                     sx={{
                       width: 34,
                       height: 34,
                       borderRadius: 1.5,
-                      bgcolor:
-                        "#eef2ff",
-                      color:
-                        "#6d28d9",
+                      bgcolor: "#eef2ff",
+                      color: "#6d28d9",
                       display: "flex",
-                      alignItems:
-                        "center",
-                      justifyContent:
-                        "center",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
                     <GroupsIcon fontSize="small" />
@@ -4443,18 +3684,12 @@ export default function StudentsPage() {
                       <Typography
                         sx={{
                           fontSize: 10.5,
-                          color:
-                            "#94a3b8",
+                          color: "#94a3b8",
                           mt: 0.1,
                         }}
                       >
-                        {
-                          selectedClass.className
-                        }{" "}
-                        • Section{" "}
-                        {
-                          selectedClass.section
-                        }
+                        {selectedClass.className} • Section{" "}
+                        {selectedClass.section}
                       </Typography>
                     )}
                   </Box>
@@ -4476,68 +3711,56 @@ export default function StudentsPage() {
                   },
                 }}
               >
-                <FormControl
-                  size="small"
-                  sx={{
-                    minWidth: {
-                      xs: "100%",
-                      sm: 220,
-                    },
+             <FormControl
+  size="small"
+  sx={{
+    minWidth: {
+      xs: "100%",
+      sm: 220,
+    },
+    ...inputSx,
+  }}
+>
+  <InputLabel>Select Class</InputLabel>
 
-                    ...inputSx,
-                  }}
-                >
-                  <InputLabel>
-                    Select Class
-                  </InputLabel>
+  <Select
+    value={viewClassId}
+    label="Select Class"
+    onChange={(e) => {
+      setViewClassId(e.target.value);
+      setSearch("");
+      setPage(1);
+    }}
+    startAdornment={
+      <InputAdornment position="start">
+        <ClassIcon fontSize="small" color="action" />
+      </InputAdornment>
+    }
+  >
+    {/* ALL CLASSES */}
+    <MenuItem value="">
+      All Classes
+    </MenuItem>
 
-                  <Select
-                    value={
-                      viewClassId
-                    }
-                    label="Select Class"
-                    onChange={(e) => {
-                      setViewClassId(e.target.value);
-                      setSearch("");
-                      setPage(1);
-                    }}
-                    startAdornment={
-                      <InputAdornment position="start">
-                        <ClassIcon
-                          fontSize="small"
-                          color="action"
-                        />
-                      </InputAdornment>
-                    }
-                  >
-                    {classes.map(
-                      (c) => (
-                        <MenuItem
-                          key={c._id}
-                          value={c._id}
-                        >
-                          {c.className} -{" "}
-                          {c.section}
-                        </MenuItem>
-                      ),
-                    )}
-                  </Select>
-                </FormControl>
+    {/* INDIVIDUAL CLASSES */}
+    {classes.map((c) => (
+      <MenuItem key={c._id} value={c._id}>
+        {c.className} - {c.section}
+      </MenuItem>
+    ))}
+  </Select>
+</FormControl>
 
                 <TextField
                   size="small"
                   value={search}
-                  disabled={
-                    !viewClassId
-                  }
+                  disabled={!viewClassId}
                   onChange={(e) => {
                     setSearch(e.target.value);
                     setPage(1);
                   }}
                   placeholder={
-                    isMobile
-                      ? "Search..."
-                      : "Search name, email or roll..."
+                    isMobile ? "Search..." : "Search name, email or roll..."
                   }
                   sx={{
                     width: {
@@ -4550,43 +3773,33 @@ export default function StudentsPage() {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <SearchIcon
-                          fontSize="small"
-                          color="action"
-                        />
+                        <SearchIcon fontSize="small" color="action" />
                       </InputAdornment>
                     ),
 
-                    endAdornment:
-                      search ? (
-                        <InputAdornment position="end">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setSearch("");
-                              setPage(1);
-                            }}
-                          >
-                            <CloseIcon fontSize="small" />
-                          </IconButton>
-                        </InputAdornment>
-                      ) : null,
+                    endAdornment: search ? (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setSearch("");
+                            setPage(1);
+                          }}
+                        >
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : null,
                   }}
                 />
 
-                {(search ||
-                  viewClassId) && (
+                {(search || viewClassId) && (
                   <Button
                     variant="outlined"
-                    onClick={
-                      clearFilters
-                    }
-                    startIcon={
-                      <FilterAltOutlinedIcon />
-                    }
+                    onClick={clearFilters}
+                    startIcon={<FilterAltOutlinedIcon />}
                     sx={{
-                      textTransform:
-                        "none",
+                      textTransform: "none",
                       borderRadius: 2,
                       minWidth: {
                         xs: "100%",
@@ -4613,11 +3826,9 @@ export default function StudentsPage() {
 
                 py: 1,
 
-                bgcolor:
-                  "#fafbff",
+                bgcolor: "#fafbff",
 
-                borderBottom:
-                  "1px solid #eef0f4",
+                borderBottom: "1px solid #eef0f4",
               }}
             >
               <Stack
@@ -4673,311 +3884,289 @@ export default function StudentsPage() {
           {/* =================================================
               MOBILE LIST
           ================================================= */}
-{/* =========================================================
+          {/* =========================================================
     STUDENTS CONTENT
 ========================================================= */}
 
-{isMobile ? (
-  <Box
-    sx={{
-      p: { xs: 1, sm: 1.5 },
-      bgcolor: "#F7F5FC",
-    }}
-  >
-    {!viewClassId ? (
-      <Paper
-        elevation={0}
-        sx={{
-          borderRadius: 2,
-          bgcolor: "#fff",
-          border: "1px solid #EAE5F2",
-        }}
-      >
-        <EmptyState />
-      </Paper>
-    ) : studentsLoading ? (
-      <Stack spacing={1}>
-        {Array.from({ length: 5 }).map((_, index) => (
-          <Box
-            key={index}
-            sx={{
-              height: 125,
-              borderRadius: 2,
-              bgcolor: "#EEEAF5",
-              animation: "studentPulse 1.5s ease-in-out infinite",
+          {isMobile ? (
+            <Box
+              sx={{
+                p: { xs: 1, sm: 1.5 },
+                bgcolor: "#F7F5FC",
+              }}
+            >
+              {!viewClassId ? (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 2,
+                    bgcolor: "#fff",
+                    border: "1px solid #EAE5F2",
+                  }}
+                >
+                  <EmptyState />
+                </Paper>
+              ) : studentsLoading ? (
+                <Stack spacing={1}>
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <Box
+                      key={index}
+                      sx={{
+                        height: 125,
+                        borderRadius: 2,
+                        bgcolor: "#EEEAF5",
+                        animation: "studentPulse 1.5s ease-in-out infinite",
 
-              "@keyframes studentPulse": {
-                "0%": {
-                  opacity: 0.55,
-                },
-                "50%": {
-                  opacity: 1,
-                },
-                "100%": {
-                  opacity: 0.55,
-                },
-              },
-            }}
-          />
-        ))}
-      </Stack>
-    ) : students.length === 0 ? (
-      <Paper
-        elevation={0}
-        sx={{
-          borderRadius: 2,
-          bgcolor: "#fff",
-          border: "1px solid #EAE5F2",
-        }}
-      >
-        <EmptyState
-          type="search"
-          search={search}
-          onClear={() => {
-            setSearch("");
-            setPage(1);
-          }}
-          onAdd={() => setCreateOpen(true)}
-        />
-      </Paper>
-    ) : (
-      <Stack spacing={1}>
-        {students.map((student) => (
-          <StudentMobileCard
-            key={student._id}
-            student={student}
-            onView={() => setViewStudent(student)}
-            onEdit={() => setEditStudent(student)}
-            onDelete={() => setDeleteCandidate(student)}
-          />
-        ))}
-      </Stack>
-    )}
-  </Box>
-) : (
-  /* =========================================================
+                        "@keyframes studentPulse": {
+                          "0%": {
+                            opacity: 0.55,
+                          },
+                          "50%": {
+                            opacity: 1,
+                          },
+                          "100%": {
+                            opacity: 0.55,
+                          },
+                        },
+                      }}
+                    />
+                  ))}
+                </Stack>
+              ) : students.length === 0 ? (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 2,
+                    bgcolor: "#fff",
+                    border: "1px solid #EAE5F2",
+                  }}
+                >
+                  <EmptyState
+                    type="search"
+                    search={search}
+                    onClear={() => {
+                      setSearch("");
+                      setPage(1);
+                    }}
+                    onAdd={() => setCreateOpen(true)}
+                  />
+                </Paper>
+              ) : (
+                <Stack spacing={1}>
+                  {students.map((student) => (
+                    <StudentMobileCard
+                      key={student._id}
+                      student={student}
+                      onView={() => setViewStudent(student)}
+                      onEdit={() => setEditStudent(student)}
+                      onDelete={() => setDeleteCandidate(student)}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          ) : (
+            /* =========================================================
      DESKTOP / TABLET
   ========================================================= */
 
-  <Box
-    sx={{
-      width: "100%",
-      overflowX: "auto",
-      bgcolor: "#fff",
-    }}
-  >
-    {!viewClassId ? (
-      <EmptyState />
-    ) : studentsLoading ? (
-      <StudentDesktopTable
-        students={[]}
-        loading
-        onView={() => {}}
-        onEdit={() => {}}
-        onDelete={() => {}}
-      />
-    ) : students.length === 0 ? (
-      <EmptyState
-        type="search"
-        search={search}
-        onClear={() => {
-          setSearch("");
-          setPage(1);
-        }}
-        onAdd={() => setCreateOpen(true)}
-      />
-    ) : (
-      <StudentDesktopTable
-        students={students}
-        loading={studentsLoading}
-        onView={setViewStudent}
-        onEdit={setEditStudent}
-        onDelete={setDeleteCandidate}
-      />
-    )}
-  </Box>
-)}
+            <Box
+              sx={{
+                width: "100%",
+                overflowX: "auto",
+                bgcolor: "#fff",
+              }}
+            >
+              {!viewClassId ? (
+                <EmptyState />
+              ) : studentsLoading ? (
+                <StudentDesktopTable
+                  students={[]}
+                  loading
+                  onView={() => {}}
+                  onEdit={() => {}}
+                  onDelete={() => {}}
+                />
+              ) : students.length === 0 ? (
+                <EmptyState
+                  type="search"
+                  search={search}
+                  onClear={() => {
+                    setSearch("");
+                    setPage(1);
+                  }}
+                  onAdd={() => setCreateOpen(true)}
+                />
+              ) : (
+                <StudentDesktopTable
+                  students={students}
+                  loading={studentsLoading}
+                  onView={setViewStudent}
+                  onEdit={setEditStudent}
+                  onDelete={setDeleteCandidate}
+                />
+              )}
+            </Box>
+          )}
 
-
-{/* =========================================================
+          {/* =========================================================
     PAGINATION FOOTER
 ========================================================= */}
 
-{viewClassId && totalStudents > 0 && (
-  <Box
-    sx={{
-      px: { xs: 1, sm: 1.5, md: 2 },
-      py: { xs: 1, sm: 1.15 },
-      borderTop: "1px solid #E8E3F0",
-      bgcolor: "#FAF9FC",
-    }}
-  >
-    <Stack
-      direction={{ xs: "column", md: "row" }}
-      alignItems={{ xs: "stretch", md: "center" }}
-      justifyContent="space-between"
-      spacing={{ xs: 1, md: 1.5 }}
-    >
-      {/* LEFT INFO */}
-      <Box
-        sx={{
-          minWidth: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: { xs: "center", md: "flex-start" },
-        }}
-      >
-        <Typography
-          sx={{
-            fontSize: { xs: 10.5, sm: 11.5 },
-            color: "#6B6375",
-            lineHeight: 1.3,
-            whiteSpace: { xs: "normal", md: "nowrap" },
-            textAlign: { xs: "center", md: "left" },
-          }}
-        >
-          <Box
-            component="span"
-            sx={{
-              fontWeight: 700,
-              color: "#5B21B6",
-            }}
-          >
-            {selectedClass
-              ? `${selectedClass.className} - ${selectedClass.section}`
-              : "Student Directory"}
-          </Box>
+          {viewClassId && totalStudents > 0 && (
+            <Box
+              sx={{
+                px: { xs: 1, sm: 1.5, md: 2 },
+                py: { xs: 1, sm: 1.15 },
+                borderTop: "1px solid #E8E3F0",
+                bgcolor: "#FAF9FC",
+              }}
+            >
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                alignItems={{ xs: "stretch", md: "center" }}
+                justifyContent="space-between"
+                spacing={{ xs: 1, md: 1.5 }}
+              >
+                {/* LEFT INFO */}
+                <Box
+                  sx={{
+                    minWidth: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: { xs: "center", md: "flex-start" },
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: { xs: 10.5, sm: 11.5 },
+                      color: "#6B6375",
+                      lineHeight: 1.3,
+                      whiteSpace: { xs: "normal", md: "nowrap" },
+                      textAlign: { xs: "center", md: "left" },
+                    }}
+                  >
+                    <Box
+                      component="span"
+                      sx={{
+                        fontWeight: 700,
+                        color: "#5B21B6",
+                      }}
+                    >
+                      {selectedClass
+                        ? `${selectedClass.className} - ${selectedClass.section}`
+                        : "Student Directory"}
+                    </Box>
+                    {" • "}
+                    Showing{" "}
+                    <Box component="strong" sx={{ color: "#292331" }}>
+                      {(page - 1) * rowsPerPage + 1}
+                    </Box>
+                    {" – "}
+                    <Box component="strong" sx={{ color: "#292331" }}>
+                      {Math.min(page * rowsPerPage, totalStudents)}
+                    </Box>
+                    {" of "}
+                    <Box component="strong" sx={{ color: "#292331" }}>
+                      {totalStudents}
+                    </Box>
+                  </Typography>
+                </Box>
 
-          {" • "}
+                {/* RIGHT CONTROLS */}
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent={{ xs: "center", md: "flex-end" }}
+                  spacing={{ xs: 0.75, sm: 1 }}
+                  sx={{
+                    flexWrap: "wrap",
+                    rowGap: 0.75,
+                  }}
+                >
+                  {/* ROWS */}
+                  <FormControl
+                    size="small"
+                    sx={{
+                      minWidth: 78,
 
-          Showing{" "}
-          <Box
-            component="strong"
-            sx={{ color: "#292331" }}
-          >
-            {(page - 1) * rowsPerPage + 1}
-          </Box>
+                      "& .MuiInputLabel-root": {
+                        fontSize: 11,
+                      },
 
-          {" – "}
+                      "& .MuiOutlinedInput-root": {
+                        height: 32,
+                        borderRadius: 1.5,
+                        bgcolor: "#fff",
+                        fontSize: 11.5,
 
-          <Box
-            component="strong"
-            sx={{ color: "#292331" }}
-          >
-            {Math.min(
-              page * rowsPerPage,
-              totalStudents
-            )}
-          </Box>
+                        "& fieldset": {
+                          borderColor: "#D9D1E5",
+                        },
 
-          {" of "}
+                        "&:hover fieldset": {
+                          borderColor: "#7C3AED",
+                        },
 
-          <Box
-            component="strong"
-            sx={{ color: "#292331" }}
-          >
-            {totalStudents}
-          </Box>
-        </Typography>
-      </Box>
+                        "&.Mui-focused fieldset": {
+                          borderColor: "#6D28D9",
+                        },
+                      },
+                    }}
+                  >
+                    <InputLabel>Rows</InputLabel>
 
-      {/* RIGHT CONTROLS */}
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent={{ xs: "center", md: "flex-end" }}
-        spacing={{ xs: 0.75, sm: 1 }}
-        sx={{
-          flexWrap: "wrap",
-          rowGap: 0.75,
-        }}
-      >
-        {/* ROWS */}
-        <FormControl
-          size="small"
-          sx={{
-            minWidth: 78,
+                    <Select
+                      value={rowsPerPage}
+                      label="Rows"
+                      onChange={(e) => {
+                        setRowsPerPage(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      sx={{
+                        bgcolor: "#fff",
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      <MenuItem value={10}>10</MenuItem>
+                      <MenuItem value={20}>20</MenuItem>
+                      <MenuItem value={50}>50</MenuItem>
+                      <MenuItem value={100}>100</MenuItem>
+                    </Select>
+                  </FormControl>
 
-            "& .MuiInputLabel-root": {
-              fontSize: 11,
-            },
+                  {/* PAGINATION */}
+                  <Pagination
+                    count={totalPages}
+                    page={Math.min(page, Math.max(totalPages, 1))}
+                    onChange={(_, value) => setPage(value)}
+                    disabled={studentsFetching}
+                    shape="rounded"
+                    size={isMobile ? "small" : "small"}
+                    siblingCount={isMobile ? 0 : 1}
+                    boundaryCount={1}
+                    sx={{
+                      "& .MuiPaginationItem-root": {
+                        minWidth: 30,
+                        height: 30,
+                        fontSize: 11.5,
+                        borderRadius: 1.5,
+                        fontWeight: 600,
+                      },
 
-            "& .MuiOutlinedInput-root": {
-              height: 32,
-              borderRadius: 1.5,
-              bgcolor: "#fff",
-              fontSize: 11.5,
+                      "& .Mui-selected": {
+                        bgcolor: "#6D28D9 !important",
+                        color: "#fff",
 
-              "& fieldset": {
-                borderColor: "#D9D1E5",
-              },
+                        "&:hover": {
+                          bgcolor: "#5B21B6 !important",
+                        },
+                      },
+                    }}
+                  />
 
-              "&:hover fieldset": {
-                borderColor: "#7C3AED",
-              },
-
-              "&.Mui-focused fieldset": {
-                borderColor: "#6D28D9",
-              },
-            },
-          }}
-        >
-          <InputLabel>Rows</InputLabel>
-
-          <Select
-            value={rowsPerPage}
-            label="Rows"
-            onChange={(e) => {
-              setRowsPerPage(Number(e.target.value));
-              setPage(1);
-            }}
-            sx={{
-              bgcolor: "#fff",
-              borderRadius: 1.5,
-            }}
-          >
-            <MenuItem value={10}>10</MenuItem>
-            <MenuItem value={20}>20</MenuItem>
-            <MenuItem value={50}>50</MenuItem>
-            <MenuItem value={100}>100</MenuItem>
-          </Select>
-        </FormControl>
-
-        {/* PAGINATION */}
-        <Pagination
-          count={totalPages}
-          page={Math.min(
-            page,
-            Math.max(totalPages, 1)
-          )}
-          onChange={(_, value) => setPage(value)}
-          disabled={studentsFetching}
-          shape="rounded"
-          size={isMobile ? "small" : "small"}
-          siblingCount={isMobile ? 0 : 1}
-          boundaryCount={1}
-          sx={{
-            "& .MuiPaginationItem-root": {
-              minWidth: 30,
-              height: 30,
-              fontSize: 11.5,
-              borderRadius: 1.5,
-              fontWeight: 600,
-            },
-
-            "& .Mui-selected": {
-              bgcolor: "#6D28D9 !important",
-              color: "#fff",
-
-              "&:hover": {
-                bgcolor: "#5B21B6 !important",
-              },
-            },
-          }}
-        />
-
-        {/* REFRESH */}
-       {/*  <Button
+                  {/* REFRESH */}
+                  {/*  <Button
           size="small"
           variant="outlined"
           startIcon={
@@ -5016,11 +4205,10 @@ export default function StudentsPage() {
         >
           Refresh
         </Button> */}
-      </Stack>
-    </Stack>
-  </Box>
-)}
-
+                </Stack>
+              </Stack>
+            </Box>
+          )}
         </Paper>
       </Box>
 
@@ -5030,35 +4218,27 @@ export default function StudentsPage() {
 
       <CreateStudentDialog
         open={createOpen}
-        onClose={() =>
-          setCreateOpen(false)
-        }
+        onClose={() => setCreateOpen(false)}
         classes={classes}
       />
 
       <StudentEditDialog
         student={editStudent}
         open={!!editStudent}
-        onClose={() =>
-          setEditStudent(null)
-        }
+        onClose={() => setEditStudent(null)}
       />
 
       <ProfileViewDialog
         profile={viewStudent}
         type="student"
         open={!!viewStudent}
-        onClose={() =>
-          setViewStudent(null)
-        }
+        onClose={() => setViewStudent(null)}
       />
 
       <DeleteStudentDialog
         student={deleteCandidate}
         open={!!deleteCandidate}
-        onClose={() =>
-          setDeleteCandidate(null)
-        }
+        onClose={() => setDeleteCandidate(null)}
       />
     </Box>
   );

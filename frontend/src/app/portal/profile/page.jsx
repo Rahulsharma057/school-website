@@ -48,7 +48,7 @@ import {
   useMyTeacherProfile,
   useUpdateMyTeacherProfile,
   useUploadMyTeacherProfilePhoto,
-useUploadTeacherDocument,
+  useUploadMyTeacherDocument,
 } from "@/hooks/useTeacher";
 
 // ======================================================
@@ -135,6 +135,73 @@ const validateDocumentFile = (file) => {
 
   return "";
 };
+
+// ======================================================
+// TEACHER DOCUMENT FLATTENING
+// FIX: new. TeacherProfile.documents is an OBJECT with named slots
+// (aadharCard, panCard, resume, offerLetter, joiningLetter,
+// appointmentLetter — each a single sub-document — plus
+// degreeCertificates[], experienceCertificates[] and otherDocuments[]
+// arrays). The old code did `Array.isArray(profile.documents) &&
+// profile.documents.map(...)`, which is always false for an object, so
+// none of a teacher's uploaded documents ever rendered here. It also
+// read a top-level `profile.aadharCardUrl` field that doesn't exist on
+// the schema at all (the real path is `profile.documents.aadharCard.url`).
+// ======================================================
+
+const SINGLE_TEACHER_DOC_LABELS = {
+  aadharCard: "Aadhar Card",
+  panCard: "PAN Card",
+  resume: "Resume",
+  offerLetter: "Offer Letter",
+  joiningLetter: "Joining Letter",
+  appointmentLetter: "Appointment Letter",
+};
+
+function flattenTeacherDocuments(documents) {
+  if (!documents) return [];
+
+  const items = [];
+
+  for (const [key, label] of Object.entries(SINGLE_TEACHER_DOC_LABELS)) {
+    const doc = documents[key];
+    if (doc?.url) {
+      items.push({ id: key, url: doc.url, title: label });
+    }
+  }
+
+  (documents.degreeCertificates || []).forEach((doc, i) => {
+    if (doc?.url) {
+      items.push({
+        id: doc._id || `degree-${i}`,
+        url: doc.url,
+        title: "Degree Certificate",
+      });
+    }
+  });
+
+  (documents.experienceCertificates || []).forEach((doc, i) => {
+    if (doc?.url) {
+      items.push({
+        id: doc._id || `experience-${i}`,
+        url: doc.url,
+        title: "Experience Certificate",
+      });
+    }
+  });
+
+  (documents.otherDocuments || []).forEach((doc, i) => {
+    if (doc?.url) {
+      items.push({
+        id: doc._id || `other-${i}`,
+        url: doc.url,
+        title: doc.name || "Other Document",
+      });
+    }
+  });
+
+  return items;
+}
 
 // ======================================================
 // SECTION CARD
@@ -1039,10 +1106,18 @@ function StudentProfileView() {
   const { mutate: downloadProfile, isPending: isDownloading } =
     useDownloadMyStudentProfile();
 
- const {
-  mutate: uploadDocument,
-  isPending: isUploadingDocument,
-} = useUploadTeacherDocument();
+  // FIX: was calling useUploadTeacherDocument() here — a STUDENT self
+  // profile page was uploading documents through the teacher-only,
+  // admin-gated /teachers/:teacherId/documents endpoint. It also passed
+  // a raw FormData where that hook expects { teacherId, formData },
+  // so even ignoring the wrong endpoint the call was shaped incorrectly.
+  // useUploadMyStudentDocument takes the FormData directly and posts to
+  // /students/my-profile/documents, which is what a student can actually
+  // call.
+  const {
+    mutate: uploadDocument,
+    isPending: isUploadingDocument,
+  } = useUploadMyStudentDocument();
 
   const [editing, setEditing] = useState(false);
 
@@ -1620,8 +1695,10 @@ const validateTeacherForm = (form) => {
     errors.emergencyPhone = "Enter a valid 10-digit emergency phone number.";
   }
 
-  if (pincode && !/^\d{6}$/.test(pincode)) {
-    errors.pincode = "Pincode must be exactly 6 digits.";
+  // FIX: was /^\d{6}$/, allowing a pincode starting with 0 — aligned with
+  // the same rule used everywhere else (backend included).
+  if (pincode && !/^[1-9]\d{5}$/.test(pincode)) {
+    errors.pincode = "Enter a valid 6-digit pincode.";
   }
 
   return errors;
@@ -1639,8 +1716,13 @@ function TeacherProfileView() {
   const { mutate: uploadPhoto, isPending: isUploadingPhoto } =
     useUploadMyTeacherProfilePhoto();
 
+  // FIX: was useUploadTeacherDocument() (the admin-only hook, which
+  // requires { teacherId, formData } and hits a route a TEACHER-role
+  // user is blocked from). Swapped to the new self-service hook, which
+  // takes the FormData directly and posts to
+  // /teachers/my-profile/documents.
   const { mutate: uploadDocument, isPending: isUploadingDocument } =
-useUploadTeacherDocument()
+    useUploadMyTeacherDocument();
 
   const [editing, setEditing] = useState(false);
 
@@ -1768,6 +1850,8 @@ useUploadTeacherDocument()
   if (isError || !profile) {
     return <ProfileError />;
   }
+
+  const teacherDocuments = flattenTeacherDocuments(profile.documents);
 
   return (
     <Box>
@@ -2308,29 +2392,16 @@ useUploadTeacherDocument()
         subtitle="View existing documents or upload a new document"
       >
         <Grid container spacing={1.5}>
-          {profile.aadharCardUrl && (
-            <Grid
-              size={{
-                xs: 12,
-                md: 6,
-              }}
-            >
-              <DocumentCard url={profile.aadharCardUrl} title="Aadhar Card" />
+          {/* FIX: was reading `profile.aadharCardUrl` (doesn't exist on
+              the schema) and `Array.isArray(profile.documents)` (always
+              false — documents is an object, not an array), so nothing
+              ever rendered here. Now uses the flattened list built from
+              the real documents object above. */}
+          {teacherDocuments.map((doc) => (
+            <Grid size={{ xs: 12, sm: 6 }} key={doc.id}>
+              <DocumentCard url={doc.url} title={doc.title} />
             </Grid>
-          )}
-{Array.isArray(profile.documents) &&
-  profile.documents.map((doc) => (
-    <Grid size={{ xs: 12, sm: 6 }} key={doc._id || doc.id || doc.url}>
-      <DocumentCard
-        url={doc.url}
-        title={
-          doc.type === "OTHER"
-            ? doc.label || "Other Document"
-            : String(doc.type || "Document").replace(/_/g, " ")
-        }
-      />
-    </Grid>
-  ))}
+          ))}
 
           <Grid
             size={{

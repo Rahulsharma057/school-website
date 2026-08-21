@@ -80,20 +80,30 @@ function findInvalidRecords(records, subjects) {
   const maxBySubject = new Map(subjects.map((s) => [s.subject, s.maxMarks]));
   const invalid = [];
 
+  const checkValue = (invalid, record, label, value, max) => {
+    if (value === undefined || value === null || value === "") return; // let backend enforce "required"
+    const num = Number(value);
+    if (Number.isNaN(num) || num < 0 || num > max) {
+      invalid.push({
+        student: record.studentName || record.studentId || "Unknown",
+        subject: label,
+        value,
+        max,
+      });
+    }
+  };
+
   (records || []).forEach((record) => {
     (record.marks || []).forEach((m) => {
       const max = maxBySubject.get(m.subject);
-      if (max === undefined) return;
+      if (max === undefined || m.status === "ABSENT") return;
 
-      const value = Number(m.marksObtained);
-
-      if (Number.isNaN(value) || value < 0 || value > max) {
-        invalid.push({
-          student: record.studentName || record.studentId || "Unknown",
-          subject: m.subject,
-          value: m.marksObtained,
-          max,
-        });
+      if (Array.isArray(m.components) && m.components.length) {
+        m.components.forEach((c) =>
+          checkValue(invalid, record, `${m.subject} / ${c.component}`, c.marksObtained, max)
+        );
+      } else {
+        checkValue(invalid, record, m.subject, m.marksObtained, max);
       }
     });
   });

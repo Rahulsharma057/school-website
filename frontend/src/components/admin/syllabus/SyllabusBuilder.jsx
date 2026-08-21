@@ -9,12 +9,12 @@ import {
   CardContent,
   Chip,
   Divider,
+  FormControlLabel,
   Grid,
   IconButton,
   MenuItem,
   Stack,
   Switch,
-  FormControlLabel,
   Tab,
   Tabs,
   TextField,
@@ -26,12 +26,14 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import SubjectIcon from "@mui/icons-material/MenuBook";
+import TopicIcon from "@mui/icons-material/Topic";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 
 import { createSyllabus, updateSyllabus } from "@/services/syllabusService";
-import { getSchoolClasses } from "@/services/schoolClassService";
+import { useClasses } from "@/hooks/useClasses"; // FIX: use the app's actual classes hook, not a nonexistent schoolClassService
 
 const ROLE_OPTIONS = ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER"];
 
@@ -43,20 +45,17 @@ const PLACEMENT_OPTIONS = [
   { value: "notice-board", label: "Notice Board" },
 ];
 
+const uid = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random()}`;
+};
+
+const emptySubtopic = () => ({ id: uid(), title: "", description: "" });
+const emptyTopic = () => ({ id: uid(), title: "", description: "", subtopics: [emptySubtopic()] });
+const emptySubject = () => ({ id: uid(), name: "", topics: [emptyTopic()] });
+
 const slugify = (text = "") =>
-  text
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^\w-]+/g, "");
-
-const emptyTopic = () => ({ id: crypto.randomUUID(), title: "", description: "" });
-
-const emptySubject = () => ({
-  id: crypto.randomUUID(),
-  name: "",
-  topics: [emptyTopic()],
-});
+  text.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^\w-]+/g, "");
 
 function TabPanel({ value, index, children }) {
   if (value !== index) return null;
@@ -67,7 +66,6 @@ export default function SyllabusBuilder({ editData, clearEdit }) {
   const queryClient = useQueryClient();
 
   const [tab, setTab] = useState(0);
-
   const [title, setTitle] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [classId, setClassId] = useState("");
@@ -76,19 +74,14 @@ export default function SyllabusBuilder({ editData, clearEdit }) {
   const [slug, setSlug] = useState("");
   const [status, setStatus] = useState(true);
   const [subjects, setSubjects] = useState([emptySubject()]);
-
   const [placements, setPlacements] = useState([]);
   const [viewRoles, setViewRoles] = useState([]);
 
-  const { data: classesData } = useQuery({
-    queryKey: ["school-classes"],
-    queryFn: async () => {
-      const res = await getSchoolClasses();
-      return res.data;
-    },
-  });
+  // FIX: consistent with the rest of the app — useClasses() already
+  // returns the normalized array (res.data.data) directly.
+  const { data: classes = [], isLoading: classesLoading, isError: classesError } = useClasses();
 
-  const classes = classesData?.data || [];
+  const getClassLabel = (c) => `${c.className}${c.section ? ` - ${c.section}` : ""}`;
 
   useEffect(() => {
     if (!editData) {
@@ -113,44 +106,68 @@ export default function SyllabusBuilder({ editData, clearEdit }) {
     setDescription(editData.description || "");
     setSlug(editData.slug || "");
     setStatus(editData.status ?? true);
+
     setSubjects(
       editData.subjects?.length
-        ? editData.subjects.map((s) => ({ ...s, topics: s.topics?.length ? s.topics : [emptyTopic()] }))
-        : [emptySubject()],
+        ? editData.subjects.map((subject) => ({
+            ...subject,
+            id: subject.id || uid(),
+            topics: subject.topics?.length
+              ? subject.topics.map((topic) => ({
+                  ...topic,
+                  id: topic.id || uid(),
+                  subtopics: topic.subtopics?.length
+                    ? topic.subtopics.map((st) => ({ ...st, id: st.id || uid() }))
+                    : [emptySubtopic()],
+                }))
+              : [emptyTopic()],
+          }))
+        : [emptySubject()]
     );
+
     setPlacements(editData.placements || []);
     setViewRoles(editData.accessControl?.viewRoles || []);
   }, [editData]);
 
   const mutation = useMutation({
-    mutationFn: (payload) =>
-      editData ? updateSyllabus(editData._id, payload) : createSyllabus(payload),
+    mutationFn: (payload) => (editData ? updateSyllabus(editData._id, payload) : createSyllabus(payload)),
+
     onSuccess: () => {
-      toast.success(editData ? "Syllabus updated" : "Syllabus created");
+      toast.success(editData ? "Syllabus updated successfully" : "Syllabus created successfully");
       queryClient.invalidateQueries({ queryKey: ["syllabi"] });
       clearEdit?.();
     },
-    onError: (err) => toast.error(err?.response?.data?.message || "Something went wrong"),
+
+    onError: (err) => {
+      toast.error(err?.response?.data?.message || "Something went wrong");
+    },
   });
 
-  const addSubject = () => setSubjects((prev) => [...prev, emptySubject()]);
-  const updateSubject = (id, patch) =>
-    setSubjects((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const removeSubject = (id) => setSubjects((prev) => prev.filter((s) => s.id !== id));
+  // ================= SUBJECT =================
 
-  const moveSubject = (index, dir) => {
+  const addSubject = () => setSubjects((prev) => [...prev, emptySubject()]);
+
+  const updateSubject = (subjectId, patch) =>
+    setSubjects((prev) => prev.map((s) => (s.id === subjectId ? { ...s, ...patch } : s)));
+
+  const removeSubject = (subjectId) =>
+    setSubjects((prev) => prev.filter((s) => s.id !== subjectId));
+
+  const moveSubject = (index, direction) => {
     setSubjects((prev) => {
       const next = [...prev];
-      const target = index + dir;
+      const target = index + direction;
       if (target < 0 || target >= next.length) return prev;
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
   };
 
+  // ================= TOPIC =================
+
   const addTopic = (subjectId) =>
     setSubjects((prev) =>
-      prev.map((s) => (s.id === subjectId ? { ...s, topics: [...s.topics, emptyTopic()] } : s)),
+      prev.map((s) => (s.id === subjectId ? { ...s, topics: [...(s.topics || []), emptyTopic()] } : s))
     );
 
   const updateTopic = (subjectId, topicId, patch) =>
@@ -158,236 +175,519 @@ export default function SyllabusBuilder({ editData, clearEdit }) {
       prev.map((s) =>
         s.id === subjectId
           ? { ...s, topics: s.topics.map((t) => (t.id === topicId ? { ...t, ...patch } : t)) }
-          : s,
-      ),
+          : s
+      )
     );
 
   const removeTopic = (subjectId, topicId) =>
     setSubjects((prev) =>
-      prev.map((s) =>
-        s.id === subjectId ? { ...s, topics: s.topics.filter((t) => t.id !== topicId) } : s,
-      ),
+      prev.map((s) => (s.id === subjectId ? { ...s, topics: s.topics.filter((t) => t.id !== topicId) } : s))
     );
 
+  // ================= SUBTOPIC =================
+
+  const addSubtopic = (subjectId, topicId) =>
+    setSubjects((prev) =>
+      prev.map((s) =>
+        s.id === subjectId
+          ? {
+              ...s,
+              topics: s.topics.map((t) =>
+                t.id === topicId ? { ...t, subtopics: [...(t.subtopics || []), emptySubtopic()] } : t
+              ),
+            }
+          : s
+      )
+    );
+
+  const updateSubtopic = (subjectId, topicId, subtopicId, patch) =>
+    setSubjects((prev) =>
+      prev.map((s) =>
+        s.id === subjectId
+          ? {
+              ...s,
+              topics: s.topics.map((t) =>
+                t.id === topicId
+                  ? {
+                      ...t,
+                      subtopics: t.subtopics.map((st) => (st.id === subtopicId ? { ...st, ...patch } : st)),
+                    }
+                  : t
+              ),
+            }
+          : s
+      )
+    );
+
+  const removeSubtopic = (subjectId, topicId, subtopicId) =>
+    setSubjects((prev) =>
+      prev.map((s) =>
+        s.id === subjectId
+          ? {
+              ...s,
+              topics: s.topics.map((t) =>
+                t.id === topicId ? { ...t, subtopics: t.subtopics.filter((st) => st.id !== subtopicId) } : t
+              ),
+            }
+          : s
+      )
+    );
+
+  // ================= PLACEMENT / ACCESS =================
+
   const togglePlacement = (value) =>
-    setPlacements((prev) => (prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value]));
+    setPlacements((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
 
   const toggleRole = (value) =>
-    setViewRoles((prev) => (prev.includes(value) ? prev.filter((r) => r !== value) : [...prev, value]));
+    setViewRoles((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+
+  // ================= SUBMIT =================
 
   const previewSlug = slugify(slug || title) || "your-syllabus-title";
 
   const handleSubmit = () => {
-    if (!title.trim()) { toast.error("Title is required"); setTab(0); return; }
-    if (!schoolName.trim()) { toast.error("School name is required"); setTab(0); return; }
-    if (!classId) { toast.error("Select a class"); setTab(0); return; }
-    if (!subjects.length) { toast.error("Add at least one subject"); setTab(1); return; }
+    if (!title.trim()) {
+      toast.error("Title is required");
+      setTab(0);
+      return;
+    }
+    if (!schoolName.trim()) {
+      toast.error("School name is required");
+      setTab(0);
+      return;
+    }
+    if (!classId) {
+      toast.error("Please select a class");
+      setTab(0);
+      return;
+    }
+    if (!subjects.length) {
+      toast.error("Add at least one subject");
+      setTab(1);
+      return;
+    }
 
-    for (const s of subjects) {
-      if (!s.name.trim()) { toast.error("Every subject needs a name"); setTab(1); return; }
-      for (const t of s.topics) {
-        if (!t.title.trim()) { toast.error(`Every topic under "${s.name}" needs a title`); setTab(1); return; }
+    for (const subject of subjects) {
+      if (!subject.name.trim()) {
+        toast.error("Every subject needs a name");
+        setTab(1);
+        return;
+      }
+      for (const topic of subject.topics || []) {
+        if (!topic.title.trim()) {
+          toast.error(`Every topic under "${subject.name}" needs a title`);
+          setTab(1);
+          return;
+        }
+        for (const subtopic of topic.subtopics || []) {
+          if (!subtopic.title.trim()) {
+            toast.error(`Every subtopic under "${topic.title}" needs a title`);
+            setTab(1);
+            return;
+          }
+        }
       }
     }
 
-    mutation.mutate({
-      title,
-      schoolName,
+    const payload = {
+      title: title.trim(),
+      schoolName: schoolName.trim(),
       classId,
-      academicYear,
-      description,
-      slug,
+      academicYear: academicYear.trim(),
+      description: description.trim(),
+      slug: slug.trim(),
       status,
-      subjects: subjects.map((s, i) => ({ ...s, order: i })),
+
+      subjects: subjects.map((subject, subjectIndex) => ({
+        id: subject.id,
+        name: subject.name.trim(),
+        order: subjectIndex,
+        topics: (subject.topics || []).map((topic, topicIndex) => ({
+          id: topic.id,
+          title: topic.title.trim(),
+          description: topic.description?.trim() || "",
+          order: topicIndex,
+          subtopics: (topic.subtopics || []).map((subtopic, subtopicIndex) => ({
+            id: subtopic.id,
+            title: subtopic.title.trim(),
+            description: subtopic.description?.trim() || "",
+            order: subtopicIndex,
+          })),
+        })),
+      })),
+
       placements,
       accessControl: { viewRoles },
-    });
+    };
+
+    mutation.mutate(payload);
   };
 
   return (
-    <Card variant="outlined" sx={{ border: "1px solid #e4e4e7", boxShadow: "none" }}>
+    <Card variant="outlined" sx={{ borderRadius: 3, borderColor: "#e4e4e7", boxShadow: "none" }}>
       <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          spacing={1}
+          mb={2}
+        >
           <Box>
-            <Typography variant="h5" fontWeight={700} sx={{ color: "#18181b" }}>
+            <Typography variant="h5" fontWeight={800}>
               {editData ? "Update Syllabus" : "Create Syllabus"}
             </Typography>
-            <Typography sx={{ fontSize: 13, color: "#71717a" }}>
-              A downloadable PDF is generated automatically from the subjects below.
-            </Typography>
+            <Typography sx={{ fontSize: 13, color: "#71717a" }}>Subject → Topic → Subtopic</Typography>
           </Box>
+
           {editData && (
-            <Chip label={`Editing: ${editData.title}`} size="small" sx={{ bgcolor: "#18181b", color: "#fff", fontWeight: 600 }} />
+            <Chip
+              label={`Editing: ${editData.title}`}
+              size="small"
+              sx={{ bgcolor: "#7e22ce", color: "#fff", fontWeight: 700 }}
+            />
           )}
         </Stack>
 
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 1, borderBottom: "1px solid #e4e4e7" }}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" sx={{ borderBottom: "1px solid #e4e4e7" }}>
           <Tab label="Basics" />
           <Tab label="Subjects & Topics" />
           <Tab label="Placement" />
           <Tab label="Access" />
         </Tabs>
 
+        {/* BASICS */}
         <TabPanel value={tab} index={0}>
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <TextField fullWidth size="small" label="Title" placeholder="Annual Syllabus 2026-27" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <TextField
+                fullWidth
+                size="small"
+                label="Syllabus Title"
+                placeholder="Annual Syllabus 2026-27"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
             </Grid>
+
             <Grid item xs={12} md={6}>
-              <TextField select fullWidth size="small" label="Class" value={classId} onChange={(e) => setClassId(e.target.value)}>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Class"
+                value={classId}
+                onChange={(e) => setClassId(e.target.value)}
+                disabled={classesLoading}
+                error={Boolean(classesError)}
+                helperText={
+                  classesError
+                    ? "Unable to load classes"
+                    : classesLoading
+                    ? "Loading classes..."
+                    : classes.length === 0
+                    ? "No classes available"
+                    : ""
+                }
+              >
                 {classes.map((c) => (
-                  <MenuItem key={c._id} value={c._id}>{c.name}</MenuItem>
+                  <MenuItem key={c._id} value={c._id}>
+                    {getClassLabel(c)}
+                  </MenuItem>
                 ))}
               </TextField>
             </Grid>
+
             <Grid item xs={12} md={6}>
-              <TextField fullWidth size="small" label="School Name" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} />
+              <TextField
+                fullWidth
+                size="small"
+                label="School Name"
+                value={schoolName}
+                onChange={(e) => setSchoolName(e.target.value)}
+              />
             </Grid>
+
             <Grid item xs={12} md={6}>
-              <TextField fullWidth size="small" label="Academic Year (optional)" placeholder="2026-27" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} />
+              <TextField
+                fullWidth
+                size="small"
+                label="Academic Year"
+                placeholder="2026-27"
+                value={academicYear}
+                onChange={(e) => setAcademicYear(e.target.value)}
+              />
             </Grid>
+
             <Grid item xs={12} md={8}>
               <TextField
                 fullWidth
                 size="small"
                 label="Public Route"
                 placeholder="Leave empty to auto-generate"
-                helperText={`Will be available at /syllabus/${previewSlug}`}
+                helperText={`/syllabus/${previewSlug}`}
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
               />
             </Grid>
+
             <Grid item xs={12} md={4}>
-              <FormControlLabel control={<Switch checked={status} onChange={(e) => setStatus(e.target.checked)} />} label="Active" />
+              <FormControlLabel
+                control={<Switch checked={status} onChange={(e) => setStatus(e.target.checked)} />}
+                label="Active"
+              />
             </Grid>
+
             <Grid item xs={12}>
-              <TextField fullWidth size="small" multiline rows={2} label="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
+              <TextField
+                fullWidth
+                size="small"
+                multiline
+                rows={3}
+                label="Description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </Grid>
           </Grid>
         </TabPanel>
 
+        {/* SUBJECTS & TOPICS & SUBTOPICS */}
         <TabPanel value={tab} index={1}>
           <Stack spacing={2}>
-            {subjects.map((subject, sIndex) => (
-              <Card key={subject.id} variant="outlined" sx={{ border: "1px solid #e4e4e7", borderRadius: 2 }}>
-                <Box sx={{ p: 2 }}>
-                  <Stack direction="row" alignItems="center" spacing={1} mb={1.5}>
-                    <Chip label={`Subject ${sIndex + 1}`} size="small" sx={{ fontWeight: 700, bgcolor: "#18181b", color: "#fff" }} />
+            {subjects.map((subject, subjectIndex) => (
+              <Card key={subject.id} variant="outlined" sx={{ borderRadius: 3, borderColor: "#ddd6fe", overflow: "hidden" }}>
+                <Box sx={{ p: 2, bgcolor: "#faf5ff" }}>
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    alignItems={{ xs: "stretch", sm: "center" }}
+                    spacing={1}
+                  >
+                    <Chip
+                      icon={<SubjectIcon />}
+                      label={`Subject ${subjectIndex + 1}`}
+                      sx={{ bgcolor: "#7e22ce", color: "#fff", fontWeight: 700 }}
+                    />
                     <TextField
+                      fullWidth
                       size="small"
-                      placeholder="Subject name (e.g. Mathematics)"
+                      placeholder="Mathematics"
                       value={subject.name}
                       onChange={(e) => updateSubject(subject.id, { name: e.target.value })}
-                      sx={{ flex: 1 }}
+                      sx={{ bgcolor: "#fff" }}
                     />
-                    <Tooltip title="Move up">
-                      <span>
-                        <IconButton size="small" disabled={sIndex === 0} onClick={() => moveSubject(sIndex, -1)}>
-                          <ArrowUpwardIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title="Move down">
-                      <span>
-                        <IconButton size="small" disabled={sIndex === subjects.length - 1} onClick={() => moveSubject(sIndex, 1)}>
-                          <ArrowDownwardIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title="Remove subject">
-                      <IconButton size="small" onClick={() => removeSubject(subject.id)} sx={{ color: "#dc2626" }}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-
-                  <Stack spacing={1} pl={2}>
-                    {subject.topics.map((topic) => (
-                      <Stack key={topic.id} direction="row" spacing={1} alignItems="flex-start">
-                        <TextField
-                          size="small"
-                          placeholder="Topic title"
-                          value={topic.title}
-                          onChange={(e) => updateTopic(subject.id, topic.id, { title: e.target.value })}
-                          sx={{ width: 240 }}
-                        />
-                        <TextField
-                          size="small"
-                          placeholder="Topic description (optional)"
-                          value={topic.description}
-                          onChange={(e) => updateTopic(subject.id, topic.id, { description: e.target.value })}
-                          sx={{ flex: 1 }}
-                        />
-                        <IconButton size="small" onClick={() => removeTopic(subject.id, topic.id)} sx={{ color: "#dc2626" }}>
+                    <Stack direction="row" spacing={0.5}>
+                      <Tooltip title="Move up">
+                        <span>
+                          <IconButton size="small" disabled={subjectIndex === 0} onClick={() => moveSubject(subjectIndex, -1)}>
+                            <ArrowUpwardIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Move down">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={subjectIndex === subjects.length - 1}
+                            onClick={() => moveSubject(subjectIndex, 1)}
+                          >
+                            <ArrowDownwardIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Delete subject">
+                        <IconButton size="small" onClick={() => removeSubject(subject.id)} sx={{ color: "#dc2626" }}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
-                      </Stack>
-                    ))}
-
-                    <Button size="small" startIcon={<AddIcon />} onClick={() => addTopic(subject.id)} sx={{ textTransform: "none", alignSelf: "flex-start", color: "#3f3f46" }}>
-                      Add Topic
-                    </Button>
+                      </Tooltip>
+                    </Stack>
                   </Stack>
+                </Box>
+
+                <Box sx={{ p: 2 }}>
+                  <Stack spacing={2}>
+                    {(subject.topics || []).map((topic, topicIndex) => (
+                      <Box key={topic.id} sx={{ border: "1px solid #e4e4e7", borderRadius: 2, p: 1.5, bgcolor: "#fff" }}>
+                        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "stretch", sm: "center" }}>
+                          <Chip
+                            icon={<TopicIcon />}
+                            label={`Topic ${topicIndex + 1}`}
+                            size="small"
+                            sx={{ bgcolor: "#f3e8ff", color: "#7e22ce", fontWeight: 700 }}
+                          />
+                          <TextField
+                            fullWidth
+                            size="small"
+                            placeholder="Real Numbers"
+                            value={topic.title}
+                            onChange={(e) => updateTopic(subject.id, topic.id, { title: e.target.value })}
+                          />
+                          <IconButton size="small" onClick={() => removeTopic(subject.id, topic.id)} sx={{ color: "#dc2626" }}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+
+                        <TextField
+                          fullWidth
+                          size="small"
+                          multiline
+                          rows={2}
+                          placeholder="Topic description..."
+                          value={topic.description || ""}
+                          onChange={(e) => updateTopic(subject.id, topic.id, { description: e.target.value })}
+                          sx={{ mt: 1 }}
+                        />
+
+                        <Box
+                          sx={{
+                            mt: 2,
+                            ml: { xs: 0, sm: 3 },
+                            pl: { xs: 0, sm: 2 },
+                            borderLeft: { xs: "none", sm: "2px solid #ede9fe" },
+                          }}
+                        >
+                          <Typography sx={{ fontSize: 12, fontWeight: 800, color: "#71717a", mb: 1, textTransform: "uppercase" }}>
+                            Subtopics
+                          </Typography>
+
+                          <Stack spacing={1}>
+                            {(topic.subtopics || []).map((subtopic, subtopicIndex) => (
+                              <Stack key={subtopic.id} direction={{ xs: "column", sm: "row" }} spacing={1}>
+                                <Chip
+                                  label={subtopicIndex + 1}
+                                  size="small"
+                                  sx={{ width: 28, bgcolor: "#f4f4f5", fontWeight: 700 }}
+                                />
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  placeholder="Euclid's Division Lemma"
+                                  value={subtopic.title}
+                                  onChange={(e) =>
+                                    updateSubtopic(subject.id, topic.id, subtopic.id, { title: e.target.value })
+                                  }
+                                />
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  placeholder="Subtopic description..."
+                                  value={subtopic.description || ""}
+                                  onChange={(e) =>
+                                    updateSubtopic(subject.id, topic.id, subtopic.id, { description: e.target.value })
+                                  }
+                                />
+                                <IconButton
+                                  size="small"
+                                  onClick={() => removeSubtopic(subject.id, topic.id, subtopic.id)}
+                                  sx={{ color: "#dc2626" }}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Stack>
+                            ))}
+                          </Stack>
+
+                          <Button
+                            size="small"
+                            startIcon={<AddIcon />}
+                            onClick={() => addSubtopic(subject.id, topic.id)}
+                            sx={{ mt: 1, textTransform: "none", color: "#7e22ce", fontWeight: 700 }}
+                          >
+                            Add Subtopic
+                          </Button>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Stack>
+
+                  <Button
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={() => addTopic(subject.id)}
+                    sx={{ mt: 2, textTransform: "none", color: "#52525b", fontWeight: 700 }}
+                  >
+                    Add Topic
+                  </Button>
                 </Box>
               </Card>
             ))}
           </Stack>
 
           <Button
+            variant="contained"
             startIcon={<AddIcon />}
             onClick={addSubject}
-            variant="contained"
-            disableElevation
-            sx={{ mt: 2, bgcolor: "#18181b", textTransform: "none", fontWeight: 600, "&:hover": { bgcolor: "#27272a" } }}
+            sx={{ mt: 2, bgcolor: "#7e22ce", textTransform: "none", fontWeight: 700, "&:hover": { bgcolor: "#6b21a8" } }}
           >
             Add Subject
           </Button>
         </TabPanel>
 
+        {/* PLACEMENT */}
         <TabPanel value={tab} index={2}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1 }}>Where should this syllabus appear on the site?</Typography>
-          <Typography sx={{ fontSize: 12, color: "#a1a1aa", mb: 1.5 }}>
-            Select every spot this should be linked from — the public page works regardless of what's selected here.
+          <Typography fontWeight={700} mb={0.5}>
+            Where should this syllabus appear?
           </Typography>
+          <Typography sx={{ fontSize: 12, color: "#71717a", mb: 2 }}>Select one or more locations.</Typography>
+
           <Stack direction="row" spacing={1} flexWrap="wrap" rowGap={1}>
-            {PLACEMENT_OPTIONS.map((p) => (
-              <Chip
-                key={p.value}
-                label={p.label}
-                clickable
-                onClick={() => togglePlacement(p.value)}
-                sx={{ fontWeight: 600, bgcolor: placements.includes(p.value) ? "#18181b" : "#f4f4f5", color: placements.includes(p.value) ? "#fff" : "#3f3f46" }}
-              />
-            ))}
+            {PLACEMENT_OPTIONS.map((item) => {
+              const active = placements.includes(item.value);
+              return (
+                <Chip
+                  key={item.value}
+                  label={item.label}
+                  clickable
+                  onClick={() => togglePlacement(item.value)}
+                  sx={{ fontWeight: 700, bgcolor: active ? "#7e22ce" : "#f4f4f5", color: active ? "#fff" : "#3f3f46" }}
+                />
+              );
+            })}
           </Stack>
         </TabPanel>
 
+        {/* ACCESS */}
         <TabPanel value={tab} index={3}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1 }}>Who can view this syllabus's public page?</Typography>
-          <Typography sx={{ fontSize: 12, color: "#a1a1aa", mb: 1.5 }}>Leave unchecked to keep it open to everyone (e.g. parents without an account).</Typography>
+          <Typography fontWeight={700} mb={0.5}>
+            Who can view this syllabus?
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: "#71717a", mb: 2 }}>Leave empty for public access.</Typography>
+
           <Stack direction="row" spacing={1} flexWrap="wrap" rowGap={1}>
-            {ROLE_OPTIONS.map((role) => (
-              <Chip
-                key={role}
-                label={role}
-                clickable
-                onClick={() => toggleRole(role)}
-                sx={{ fontWeight: 600, bgcolor: viewRoles.includes(role) ? "#18181b" : "#f4f4f5", color: viewRoles.includes(role) ? "#fff" : "#3f3f46" }}
-              />
-            ))}
+            {ROLE_OPTIONS.map((role) => {
+              const active = viewRoles.includes(role);
+              return (
+                <Chip
+                  key={role}
+                  label={role}
+                  clickable
+                  onClick={() => toggleRole(role)}
+                  sx={{ fontWeight: 700, bgcolor: active ? "#18181b" : "#f4f4f5", color: active ? "#fff" : "#3f3f46" }}
+                />
+              );
+            })}
           </Stack>
         </TabPanel>
 
         <Divider sx={{ my: 3 }} />
 
-        <Button
-          sx={{ px: 5, py: 1.4, bgcolor: "#18181b", color: "#fff", borderRadius: "8px", fontWeight: 600, textTransform: "none", "&:hover": { bgcolor: "#27272a" } }}
-          disableElevation
-          disabled={mutation.isPending}
-          onClick={handleSubmit}
-        >
-          {mutation.isPending ? "Saving..." : editData ? "Update Syllabus" : "Save Syllabus"}
-        </Button>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Button
+            variant="contained"
+            disableElevation
+            disabled={mutation.isPending}
+            onClick={handleSubmit}
+            sx={{ px: 4, py: 1.3, bgcolor: "#7e22ce", textTransform: "none", fontWeight: 700, "&:hover": { bgcolor: "#6b21a8" } }}
+          >
+            {mutation.isPending ? "Saving..." : editData ? "Update Syllabus" : "Save Syllabus"}
+          </Button>
+
+          {editData && (
+            <Button variant="outlined" onClick={() => clearEdit?.()} sx={{ textTransform: "none", fontWeight: 700 }}>
+              Cancel Edit
+            </Button>
+          )}
+        </Stack>
       </CardContent>
     </Card>
   );

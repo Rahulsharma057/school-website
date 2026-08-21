@@ -151,12 +151,6 @@ const contentMenu = [
 
 const schoolMenu = [
   {
-    title: "Classes",
-    path: "/admin/classes",
-    icon: <ClassIcon />,
-    roles: STAFF_ALL,
-  },
-  {
     title: "Students",
     path: "/admin/students",
     icon: <PersonIcon />,
@@ -169,22 +163,22 @@ const schoolMenu = [
     roles: STAFF_ALL,
   },
   {
-    title: "Teacher Assignments",
-    path: "/admin/teacher-assignments",
-    icon: <AssignmentIndIcon />,
+    title: "Classes",
+    path: "/admin/classes",
+    icon: <ClassIcon />,
     roles: STAFF_ALL,
   },
   {
-    title: "Attendance",
-    path: "/admin/attendance",
-    icon: <FactCheckIcon />,
+    title: "Subjects",
+    path: "/admin/subjects",
+    icon: <ClassIcon />,
     roles: STAFF_ALL,
   },
   {
-    title: "Promotions",
-    path: "/admin/promotions",
-    icon: <TrendingUpIcon />,
-    roles: STAFF_ALL,
+    title: "Holidays",
+    path: "/admin/holidays",
+    icon: <EventAvailableIcon />,
+    roles: STAFF_WITH_ACCOUNTANT,
   },
   {
     title: "Exams",
@@ -199,21 +193,29 @@ const schoolMenu = [
     roles: STAFF_ALL,
   },
   {
-    title: "Holidays",
-    path: "/admin/holidays",
-    icon: <EventAvailableIcon />,
-    roles: STAFF_WITH_ACCOUNTANT,
+    title: "Final-results",
+    path: "/admin/final-results",
+    icon: <PeopleIcon />,
+    roles: STAFF_ALL,
   },
   {
-    title: "Teacher Attendance",
-    path: "/admin/teacher-attendance",
+    title: "Final-results Download",
+    path: "/admin/final-results/download",
+    icon: <PeopleIcon />,
+    roles: STAFF_ALL,
+  },
+
+
+  {
+    title: "Attendance",
+    path: "/admin/attendance",
     icon: <FactCheckIcon />,
-    roles: STAFF_WITH_ACCOUNTANT,
+    roles: STAFF_ALL,
   },
   {
-    title: "Leave Requests",
-    path: "/admin/leave-requests",
-    icon: <EventBusyIcon />,
+    title: "Promotions",
+    path: "/admin/promotions",
+    icon: <TrendingUpIcon />,
     roles: STAFF_ALL,
   },
   {
@@ -234,6 +236,25 @@ const schoolMenu = [
     icon: <CalendarMonthOutlinedIcon />,
     roles: STAFF_ALL,
   },
+  {
+    title: "Teacher Assignments",
+    path: "/admin/teacher-assignments",
+    icon: <AssignmentIndIcon />,
+    roles: STAFF_ALL,
+  },
+  {
+    title: "Teacher Attendance",
+    path: "/admin/teacher-attendance",
+    icon: <FactCheckIcon />,
+    roles: STAFF_WITH_ACCOUNTANT,
+  },
+  {
+    title: "Leave Requests",
+    path: "/admin/leave-requests",
+    icon: <EventBusyIcon />,
+    roles: STAFF_ALL,
+  },
+
   {
     title: "Fee Dashboard",
     path: "/admin/fees/dashboard",
@@ -275,9 +296,14 @@ const schoolMenu = [
     path: "/admin/tasks",
     icon: <AssignmentOutlinedIcon />,
     roles: STAFF_ALL,
-   // visible: true,
+    // visible: true,
   },
-  { title: "Chat", path: "/admin/chat", icon: <ChatOutlinedIcon />, roles: STAFF_ALL },
+  {
+    title: "Chat",
+    path: "/admin/chat",
+    icon: <ChatOutlinedIcon />,
+    roles: STAFF_ALL,
+  },
 ];
 
 /* =====================================================
@@ -400,7 +426,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
     >
       {/* LOGO */}
 
-     {/*  <Box
+      {/*  <Box
         sx={{
           height: {
             xs: MOBILE_HEADER_HEIGHT,

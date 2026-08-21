@@ -62,6 +62,21 @@ const portalMenu = [
     visible: true,
   },
   {
+    title: "Final-result",
+    path: "/portal/final-results",
+    icon: <GradeIcon />,
+    roles: ["STUDENT"],
+    visible: true,
+  },
+  {
+    title: "Final-result Download",
+    path: "/portal/final-results/pdf",
+    icon: <GradeIcon />,
+    roles: ["STUDENT"],
+    visible: true,
+  },
+
+  {
     title: "My Timetable",
     path: "/portal/timetable",
     icon: <CalendarMonthOutlinedIcon />,
@@ -138,6 +153,13 @@ const portalMenu = [
     title: "Enter Results",
     path: "/portal/teacher-results",
     icon: <AssignmentTurnedInOutlinedIcon />,
+    roles: ["TEACHER"],
+    visible: true,
+  },
+  {
+    title: "Final Results Download",
+    path: "/portal/teacher-final-results",
+    icon: <GradeIcon />,
     roles: ["TEACHER"],
     visible: true,
   },

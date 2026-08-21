@@ -1,17 +1,73 @@
 import api from "./api";
 
-export const getClassStudentsForPromotion = (classId) => {
-  return api.get(`/promotions/class/${classId}/students`);
+// =====================================================
+// GET CLASS STUDENTS FOR PROMOTION
+// =====================================================
+
+export const getClassStudentsForPromotion = (
+  classId
+) => {
+  return api.get(
+    `/promotions/class/${classId}/students`
+  );
 };
 
-export const bulkPromote = (data) => {
-  return api.post("/promotions/bulk-promote", data);
+// =====================================================
+// GET PROMOTION RESULT
+// =====================================================
+
+export const getPromotionResult = ({
+  classId,
+  academicYear,
+} = {}) => {
+  const params = {
+    classId,
+  };
+
+  if (academicYear) {
+    params.academicYear =
+      academicYear;
+  }
+
+  return api.get(
+    "/promotions/results",
+    {
+      params,
+    }
+  );
 };
 
-export const getMyAcademicHistory = () => {
-  return api.get("/promotions/history/me");
+// =====================================================
+// BULK PROMOTE
+// =====================================================
+
+export const bulkPromote = (
+  data
+) => {
+  return api.post(
+    "/promotions/bulk-promote",
+    data
+  );
 };
 
-export const getStudentAcademicHistory = (studentId) => {
-  return api.get(`/promotions/history/${studentId}`);
-};
+// =====================================================
+// MY ACADEMIC HISTORY
+// =====================================================
+
+export const getMyAcademicHistory =
+  () => {
+    return api.get(
+      "/promotions/history/me"
+    );
+  };
+
+// =====================================================
+// STUDENT ACADEMIC HISTORY
+// =====================================================
+
+export const getStudentAcademicHistory =
+  (studentId) => {
+    return api.get(
+      `/promotions/history/${studentId}`
+    );
+  };
